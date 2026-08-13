@@ -227,6 +227,19 @@ def main():
     apts = sess.find_apt(ndy, reg, eub, args.apt)
     if not apts:
         raise SystemExit(f"단지 '{args.apt}' 검색 결과 없음 (reg={reg}, eub={eub})")
+    if len(apts) > 1:
+        # "목동신시가지13단지" 같은 이름은 실제 등록명("목동신시가지13")과 달라 매칭이 안 되고,
+        # 대신 "목동신시가지"처럼 짧게 검색하면 1~14단지가 전부 잡히는 경우가 흔하다 - 여기서
+        # 말없이 apts[0]을 골랐다가 엉뚱한 단지로 조회되는 사고를 막기 위해 반드시 명시적으로
+        # 고르게 한다 (COMMON_APT_NAME 완전일치가 있으면 그것만 자동 채택).
+        exact = [a for a in apts if a.get("COMMON_APT_NAME") == args.apt]
+        if len(exact) == 1:
+            apts = exact
+        else:
+            cands = "\n".join(f"  - {a['name']}  (COMMON_APT_NAME={a.get('COMMON_APT_NAME')!r})"
+                               for a in apts)
+            raise SystemExit(f"'{args.apt}' 검색 결과가 {len(apts)}건이라 특정할 수 없습니다. "
+                              f"--apt 값을 아래 COMMON_APT_NAME 중 하나로 정확히 지정하세요:\n{cands}")
     apt = apts[0]
     apt_code = str(apt["code"])
     print(f"[*] 단지: {apt['name']} (code={apt_code})", file=sys.stderr)

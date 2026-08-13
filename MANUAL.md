@@ -146,7 +146,29 @@ python3 officetel_price.py --bjd 1153010100 --building-name 팰러티움  # 건�
 
 ---
 
-## 웹 리포트 (Artifact) — `webapp/report.html`
+## 매일 자동 갱신되는 웹 리포트 (GitHub Pages) — 이게 메인
+
+**https://dufresne1226-mkjil.github.io/mkjil_maemul/**
+
+GitHub Actions가 매일 00:00 UTC(=한국시간 09:00)에 `build_report.py`를 실행해서
+6개 단지 최신 매물을 다시 긁고, `docs/index.html`을 갱신 → 커밋 → Pages 자동
+배포한다. 사람이 아무것도 안 해도 됨 — 이 링크만 새로고침하면 항상 최신.
+
+- 워크플로우: `.github/workflows/daily-refresh.yml`
+- 빌드 스크립트: `build_report.py` (webapp/report.html을 템플릿으로 써서
+  docs/index.html을 만듦 — pipeline.py의 dedupe_by_unit/to_pyeong 재사용)
+- 저장소: `dufresne1226-mkjil/mkjil_maemul` (**Public** — GitHub Pages 무료플랜은
+  private 저장소에서 안 됨, 그래서 매매 시도 끝에 public으로 전환함. 매물
+  데이터엔 개인정보 없어서 문제없다고 판단)
+- 수동으로 한 번 더 돌리고 싶으면: repo Actions 탭에서 "Daily listing refresh"
+  워크플로우 → "Run workflow" 버튼 (workflow_dispatch로 설정해둠)
+
+**클라우드 라우틴(`/schedule`)은 이제 안 씀** — 네트워크가 막혀서 실패했던 것
+(위 "매일 자동 갱신(클라우드 스케줄) 시도했으나 실패" 항목 참고). 그 라우틴은
+`enabled:false`로 꺼둔 채 남아있음 (trig_01Qiktzd3H7jqCG9pziy9QLD) — 안 쓰면
+https://claude.ai/code/routines 에서 삭제해도 됨.
+
+## 예전 방식: 수동 Artifact — `webapp/report.html`
 
 pipeline.py 결과를 필터링 가능한 웹페이지로 발행해둔 것. **실시간 조회 아님** —
 Artifact는 외부 네트워크 요청이 CSP로 막혀있어서 네오넷/텐컴즈를 직접 못 부른다.
