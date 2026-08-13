@@ -5,6 +5,13 @@ on:
     # 09:00 KST = 00:00 UTC
     - cron: "0 0 * * *"
   workflow_dispatch: {}
+  push:
+    branches: [main]
+    # ignore docs/** so the workflow's own data-refresh commit doesn't
+    # re-trigger itself in a loop - only template/script/workflow edits
+    # pushed by hand should auto-rebuild+redeploy.
+    paths-ignore:
+      - "docs/**"
 
 permissions:
   contents: write
