@@ -399,10 +399,63 @@
     line-height: 1.7;
   }
 
-  @media (max-width: 560px) {
+  @media (max-width: 640px) {
+    .wrap { padding: 20px 14px 56px; }
+
     .summary { grid-template-columns: repeat(2, 1fr); }
-    .controls { flex-direction: column; align-items: stretch; }
+    .controls { flex-direction: column; align-items: stretch; padding: 16px; }
     #complexSelect, #dongFilter, .field.grow { width: 100%; min-width: 0; }
+    select, input[type="text"] { font-size: 16px; padding: 10px 11px; } /* 16px prevents iOS zoom-on-focus */
+
+    .trade-pills { width: 100%; }
+    .trade-pills button { flex: 1; padding: 10px 8px; }
+
+    .result-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
+
+    /* ---- table -> stacked cards ---- */
+    .table-scroll { overflow-x: visible; border: none; }
+    table { min-width: 0; }
+    thead { display: none; }
+    tbody, tr, td { display: block; width: 100%; }
+    tbody tr {
+      border: 1px solid var(--paper-line);
+      border-radius: 3px;
+      margin-bottom: 10px;
+      padding: 4px 14px;
+      background: var(--paper);
+    }
+    tbody tr:hover td { background: transparent; }
+    tbody td {
+      border-bottom: 1px solid var(--paper-line);
+      padding: 9px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 14px;
+    }
+    tbody tr td:last-child { border-bottom: none; }
+    tbody td::before {
+      content: attr(data-label);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ink-soft);
+      flex: 0 0 auto;
+    }
+    tbody td.c-price {
+      font-size: 16px;
+      background: var(--paper-deep);
+      margin: 2px -14px;
+      padding: 10px 14px;
+      border-bottom: none;
+    }
+    tbody td.c-price::before { color: var(--ink-soft); text-transform: uppercase; }
+    tbody td.c-note {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    tbody td.c-note:empty { display: none; }
   }
 
   /* ---------- Coverage banner ---------- */
@@ -700,14 +753,14 @@
       rows.forEach(function (r) {
         var tr = document.createElement("tr");
         tr.innerHTML =
-          '<td class="c-num">' + r.pyeong.toFixed(1) + "평</td>" +
-          '<td class="c-num">' + r.exclusive.toFixed(1) + "㎡</td>" +
-          '<td class="c-num">' + escapeHtml(r.dong) + "</td>" +
-          '<td class="c-num">' + escapeHtml(r.floor || "-") + "</td>" +
-          '<td class="c-price">' + fmtPrice(r) + "</td>" +
-          '<td><span class="stamp-date">' + fmtDate(r.date) + "</span></td>" +
-          '<td class="c-note">' + escapeHtml(r.note || "") + "</td>" +
-          '<td class="src-tag">' + escapeHtml(r.source) + "</td>";
+          '<td class="c-num" data-label="평형">' + r.pyeong.toFixed(1) + "평</td>" +
+          '<td class="c-num" data-label="전용면적">' + r.exclusive.toFixed(1) + "㎡</td>" +
+          '<td class="c-num" data-label="동">' + escapeHtml(r.dong) + "</td>" +
+          '<td class="c-num" data-label="층">' + escapeHtml(r.floor || "-") + "</td>" +
+          '<td class="c-price" data-label="가격">' + fmtPrice(r) + "</td>" +
+          '<td data-label="확인일"><span class="stamp-date">' + fmtDate(r.date) + "</span></td>" +
+          '<td class="c-note" data-label="비고">' + escapeHtml(r.note || "") + "</td>" +
+          '<td class="src-tag" data-label="출처">' + escapeHtml(r.source) + "</td>";
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
