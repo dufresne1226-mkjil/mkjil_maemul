@@ -67,16 +67,18 @@ def _fetch_complex_once(name):
     return combined
 
 
-def fetch_complex(name, attempts=2):
-    """Some environments (observed repeatedly on GitHub Actions runners,
-    not locally) see inconsistent per-request slowness/packet loss against
-    these sites that a single higher timeout doesn't fully absorb - repeat
-    runs came back with different, sometimes 20-30% lower, row counts than
-    a local fetch of the same complex at the same moment. Retrying the
-    whole complex and keeping the attempt with the most rows is a blunt
-    but effective mitigation: pagination loops in neonet_fetch/tencomz_fetch
-    stop early on a failed/empty request, so more rows reliably means a
-    more complete fetch, not just noise."""
+def fetch_complex(name, attempts=1):
+    """attempts=1 on purpose - tried 2 (keep-best-of-2) here and it made
+    things WORSE on GitHub Actions (170 local -> 142 -> 78 total rows across
+    runs), not better. Working theory: these sites' anti-bot defenses treat
+    a burst of repeated requests from the same (GH-runner-shared) IP as
+    more suspicious, not less, so retrying compounds the throttling instead
+    of recovering from it. GH Actions runs are just going to have lower and
+    more variable completeness than a local run from this session's IP -
+    that's a property of the target sites' bot defenses reacting to GH's
+    shared/reused IP ranges, not something fixable by retrying harder from
+    the same place. Left as a function (not inlined) in case a real fix
+    (e.g. spacing requests out more) is worth trying later."""
     best = []
     for i in range(attempts):
         rows = _fetch_complex_once(name)
@@ -90,7 +92,15 @@ def fetch_complex(name, attempts=2):
 
 def main():
     data = {}
-    for name in COMPLEXES:
+    for i, name in enumerate(COMPLEXES):
+        if i > 0:
+            time.sleep(3)  # light pacing between complexes - a burst of 6
+                            # complexes back-to-back looks more bot-like to
+                            # these sites' defenses than the same requests
+                            # spread out a little; unlike per-complex retry
+                            # (tried and reverted, see fetch_complex), this
+                            # doesn't add extra requests, just spaces the
+                            # existing ones out.
         rows = fetch_complex(name)
         data[name] = rows
         print(f"{name}: {len(rows)} rows", file=sys.stderr)
