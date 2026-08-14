@@ -2,8 +2,9 @@ name: Daily listing refresh
 
 on:
   schedule:
-    # 09:00 KST = 00:00 UTC
-    - cron: "0 0 * * *"
+    # 09:00 KST = 00:00 UTC (offset 7 min off the hour to dodge GitHub's
+    # top-of-hour scheduling congestion, which caused ~6h delay at :00)
+    - cron: "7 0 * * *"
   workflow_dispatch: {}
   push:
     branches: [main]
