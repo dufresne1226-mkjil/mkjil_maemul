@@ -43,10 +43,23 @@ jobs:
           git add docs/index.html
           if git diff --cached --quiet; then
             echo "No changes to commit"
-          else
-            git commit -m "daily data refresh $(date -u +%Y-%m-%d)"
-            git push
+            exit 0
           fi
+          git commit -m "daily data refresh $(date -u +%Y-%m-%d)"
+          # Retry on push races (concurrent runs / a manual push landing at
+          # the same time) instead of failing outright - rebase onto
+          # whatever's now on origin/main and try again, a few times.
+          for i in 1 2 3 4 5; do
+            if git push; then
+              exit 0
+            fi
+            echo "push rejected, retrying ($i/5)..."
+            git fetch origin main
+            git rebase origin/main
+            sleep $((RANDOM % 5 + 1))
+          done
+          echo "::error::push failed after 5 retries"
+          exit 1
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
