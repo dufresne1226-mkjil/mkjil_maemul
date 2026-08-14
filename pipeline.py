@@ -90,8 +90,17 @@ TENCOMZ_TYPES = ["아파트", "오피스텔", "분양권", "주택", "토지", "
 # hard way: a GH Actions run sat "in progress" for 9+ minutes on one fetch
 # and had to be cancelled by hand. subprocess timeout is a second backstop
 # in case curl itself ever fails to honor its own flags.
-CURL_TIMEOUT_ARGS = ["--connect-timeout", "10", "--max-time", "25"]
-SUBPROCESS_TIMEOUT = 35
+#
+# 25s max-time was tried first and was too tight: from a GitHub Actions
+# runner (higher/more variable latency to Korean sites than a local
+# session), some individual paginated requests are just legitimately slow,
+# not stuck - 25s cut them off mid-pagination and silently produced partial
+# data (11단지 55->44 rows, 12단지 53->31 rows in one run, no error surfaced).
+# 60s gives real-but-slow requests room to finish while still bounding a
+# truly stuck connection (the workflow's own job-level timeout-minutes is
+# the outer backstop regardless).
+CURL_TIMEOUT_ARGS = ["--connect-timeout", "15", "--max-time", "60"]
+SUBPROCESS_TIMEOUT = 70
 
 
 def curl_get(url, extra_headers=None):
