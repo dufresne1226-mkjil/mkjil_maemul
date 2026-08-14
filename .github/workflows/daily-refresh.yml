@@ -2,9 +2,8 @@ name: Daily listing refresh
 
 on:
   schedule:
-    # 09:00 KST = 00:00 UTC (offset 7 min off the hour to dodge GitHub's
-    # top-of-hour scheduling congestion, which caused ~6h delay at :00)
-    - cron: "7 0 * * *"
+    # 09:00 KST = 00:00 UTC
+    - cron: "0 0 * * *"
   workflow_dispatch: {}
   push:
     branches: [main]
@@ -26,7 +25,6 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -44,23 +42,10 @@ jobs:
           git add docs/index.html
           if git diff --cached --quiet; then
             echo "No changes to commit"
-            exit 0
+          else
+            git commit -m "daily data refresh $(date -u +%Y-%m-%d)"
+            git push
           fi
-          git commit -m "daily data refresh $(date -u +%Y-%m-%d)"
-          # Retry on push races (concurrent runs / a manual push landing at
-          # the same time) instead of failing outright - rebase onto
-          # whatever's now on origin/main and try again, a few times.
-          for i in 1 2 3 4 5; do
-            if git push; then
-              exit 0
-            fi
-            echo "push rejected, retrying ($i/5)..."
-            git fetch origin main
-            git rebase origin/main
-            sleep $((RANDOM % 5 + 1))
-          done
-          echo "::error::push failed after 5 retries"
-          exit 1
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

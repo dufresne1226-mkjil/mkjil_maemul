@@ -11,11 +11,7 @@ Pages to serve.
 import json
 import re
 import sys
-import time
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-KST = timezone(timedelta(hours=9))
 
 sys.path.insert(0, str(Path(__file__).parent))
 from pipeline import (
@@ -38,7 +34,7 @@ COMPLEXES = [
 ]
 
 
-def _fetch_complex_once(name):
+def fetch_complex(name):
     cached = COMPLEX_CACHE.get(name, {})
     region_cd = cached.get("region_cd")
     neonet_cc = cached.get("neonet_complex_cd")
@@ -67,40 +63,9 @@ def _fetch_complex_once(name):
     return combined
 
 
-def fetch_complex(name, attempts=1):
-    """attempts=1 on purpose - tried 2 (keep-best-of-2) here and it made
-    things WORSE on GitHub Actions (170 local -> 142 -> 78 total rows across
-    runs), not better. Working theory: these sites' anti-bot defenses treat
-    a burst of repeated requests from the same (GH-runner-shared) IP as
-    more suspicious, not less, so retrying compounds the throttling instead
-    of recovering from it. GH Actions runs are just going to have lower and
-    more variable completeness than a local run from this session's IP -
-    that's a property of the target sites' bot defenses reacting to GH's
-    shared/reused IP ranges, not something fixable by retrying harder from
-    the same place. Left as a function (not inlined) in case a real fix
-    (e.g. spacing requests out more) is worth trying later."""
-    best = []
-    for i in range(attempts):
-        rows = _fetch_complex_once(name)
-        print(f"  attempt {i+1}/{attempts}: {len(rows)} rows", file=sys.stderr)
-        if len(rows) > len(best):
-            best = rows
-        if i < attempts - 1:
-            time.sleep(2)
-    return best
-
-
 def main():
     data = {}
-    for i, name in enumerate(COMPLEXES):
-        if i > 0:
-            time.sleep(3)  # light pacing between complexes - a burst of 6
-                            # complexes back-to-back looks more bot-like to
-                            # these sites' defenses than the same requests
-                            # spread out a little; unlike per-complex retry
-                            # (tried and reverted, see fetch_complex), this
-                            # doesn't add extra requests, just spaces the
-                            # existing ones out.
+    for name in COMPLEXES:
         rows = fetch_complex(name)
         data[name] = rows
         print(f"{name}: {len(rows)} rows", file=sys.stderr)
@@ -124,12 +89,6 @@ def main():
         print(f"ERROR: expected exactly 1 listing-data script tag, found {n}",
               file=sys.stderr)
         sys.exit(1)
-
-    build_time = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
-    if "__BUILD_TIME__" not in html:
-        print("WARNING: __BUILD_TIME__ placeholder not found in template",
-              file=sys.stderr)
-    html = html.replace("__BUILD_TIME__", build_time)
 
     OUTPUT.parent.mkdir(exist_ok=True)
     OUTPUT.write_text(html, encoding="utf-8")

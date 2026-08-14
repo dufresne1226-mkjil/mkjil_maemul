@@ -84,45 +84,20 @@ REGION_CACHE = {
 TENCOMZ_TYPES = ["아파트", "오피스텔", "분양권", "주택", "토지", "원룸", "상가", "사무실", "공장", "재개발", "건물"]
 
 
-# --connect-timeout/--max-time: without these, a single stalled connection
-# (e.g. a Korean site not responding from a new/unfamiliar IP like a GitHub
-# Actions runner's) hangs curl - and this function - forever. Confirmed the
-# hard way: a GH Actions run sat "in progress" for 9+ minutes on one fetch
-# and had to be cancelled by hand. subprocess timeout is a second backstop
-# in case curl itself ever fails to honor its own flags.
-#
-# 25s max-time was tried first and was too tight: from a GitHub Actions
-# runner (higher/more variable latency to Korean sites than a local
-# session), some individual paginated requests are just legitimately slow,
-# not stuck - 25s cut them off mid-pagination and silently produced partial
-# data (11단지 55->44 rows, 12단지 53->31 rows in one run, no error surfaced).
-# 60s gives real-but-slow requests room to finish while still bounding a
-# truly stuck connection (the workflow's own job-level timeout-minutes is
-# the outer backstop regardless).
-CURL_TIMEOUT_ARGS = ["--connect-timeout", "15", "--max-time", "60"]
-SUBPROCESS_TIMEOUT = 70
-
-
 def curl_get(url, extra_headers=None):
-    cmd = ["curl", "-s", "-A", UA, *CURL_TIMEOUT_ARGS]
+    cmd = ["curl", "-s", "-A", UA]
     for h in (extra_headers or []):
         cmd += ["-H", h]
     cmd.append(url)
-    try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT).stdout
-    except subprocess.TimeoutExpired:
-        return ""
+    return subprocess.run(cmd, capture_output=True, text=True).stdout
 
 
 def curl_post(url, data_str, extra_headers=None):
-    cmd = ["curl", "-s", "-A", UA, *CURL_TIMEOUT_ARGS, "-H", "Content-Type: application/x-www-form-urlencoded"]
+    cmd = ["curl", "-s", "-A", UA, "-H", "Content-Type: application/x-www-form-urlencoded"]
     for h in (extra_headers or []):
         cmd += ["-H", h]
     cmd += ["--data-binary", data_str, url]
-    try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT).stdout
-    except subprocess.TimeoutExpired:
-        return ""
+    return subprocess.run(cmd, capture_output=True, text=True).stdout
 
 
 def to_utf8(euc_kr_bytes_text):
@@ -133,11 +108,8 @@ def to_utf8(euc_kr_bytes_text):
 
 
 def curl_get_bytes(url):
-    cmd = ["curl", "-s", "-A", UA, *CURL_TIMEOUT_ARGS, url]
-    try:
-        return subprocess.run(cmd, capture_output=True, timeout=SUBPROCESS_TIMEOUT).stdout
-    except subprocess.TimeoutExpired:
-        return b""
+    cmd = ["curl", "-s", "-A", UA, url]
+    return subprocess.run(cmd, capture_output=True).stdout
 
 
 # ---------------------------------------------------------------------------

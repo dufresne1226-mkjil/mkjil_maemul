@@ -92,14 +92,6 @@
     margin-bottom: 28px;
   }
 
-  .eyebrow-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px 16px;
-  }
-
   .eyebrow {
     font-size: 12px;
     letter-spacing: 0.14em;
@@ -117,19 +109,6 @@
     border-radius: 50%;
     background: var(--stamp);
     display: inline-block;
-  }
-
-  .build-time {
-    font-size: 12px;
-    color: var(--ink-soft);
-    white-space: nowrap;
-  }
-
-  .build-time b {
-    font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-    color: var(--ink);
   }
 
   h1 {
@@ -177,13 +156,6 @@
     font-variant-numeric: tabular-nums;
     font-size: 19px;
     font-weight: 600;
-  }
-
-  .summary-cell .cell-note {
-    font-size: 11px;
-    color: var(--jeonse);
-    line-height: 1.4;
-    margin-top: 2px;
   }
 
   /* ---------- Controls ---------- */
@@ -527,10 +499,7 @@
 
 <div class="wrap">
   <header>
-    <div class="eyebrow-row">
-      <span class="eyebrow">매물대장 · 실시간 조회 아님, 자동 스크래핑 결과</span>
-      <span class="build-time">마지막 자동 갱신 <b id="buildTime">__BUILD_TIME__</b></span>
-    </div>
+    <div class="eyebrow">매물대장 · 실시간 수기 조회 아님, 최근 조회분 기준</div>
     <h1 id="complexTitle">목동신시가지13단지</h1>
     <p class="subhead" id="complexSub">
       네오넷·텐컴즈 조회 결과를 동일 매물 기준으로 정리한 현재 호가 대장입니다.
@@ -683,11 +652,7 @@
         summaryCell("전체 매물", rows.length + "건") +
         summaryCell("매매 / 전세 / 월세", counts.매매 + " / " + counts.전세 + " / " + counts.월세) +
         summaryCell("평형 범위", minPyeong.toFixed(1) + " ~ " + maxPyeong.toFixed(1) + "평") +
-        summaryCell(
-          "매물 최근 확인일",
-          latestDate(rows),
-          "이 단지도 " + buildDateShort() + " 자동 스크래핑에서 정상 재확인됨 (매물 변동이 없었을 뿐)"
-        );
+        summaryCell("최근 확인일", latestDate(rows));
 
       // ---- coverage banner ----
       renderCoverage(state.complex);
@@ -715,22 +680,13 @@
       emptyState.hidden = any;
     }
 
-    function buildDateShort() {
-      // "2026-08-14 16:35 KST" -> "08.14"
-      var raw = (document.getElementById("buildTime").textContent || "").trim();
-      var m = raw.match(/\d{4}-(\d{2})-(\d{2})/);
-      return m ? m[1] + "." + m[2] : raw;
-    }
-
-    function summaryCell(label, value, note) {
+    function summaryCell(label, value) {
       return (
         '<div class="summary-cell"><span class="label">' +
         escapeHtml(label) +
         '</span><span class="value">' +
         escapeHtml(value) +
-        "</span>" +
-        (note ? '<span class="cell-note">' + escapeHtml(note) + "</span>" : "") +
-        "</div>"
+        "</span></div>"
       );
     }
 
