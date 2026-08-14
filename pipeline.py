@@ -84,20 +84,36 @@ REGION_CACHE = {
 TENCOMZ_TYPES = ["아파트", "오피스텔", "분양권", "주택", "토지", "원룸", "상가", "사무실", "공장", "재개발", "건물"]
 
 
+# --connect-timeout/--max-time: without these, a single stalled connection
+# (e.g. a Korean site not responding from a new/unfamiliar IP like a GitHub
+# Actions runner's) hangs curl - and this function - forever. Confirmed the
+# hard way: a GH Actions run sat "in progress" for 9+ minutes on one fetch
+# and had to be cancelled by hand. subprocess timeout is a second backstop
+# in case curl itself ever fails to honor its own flags.
+CURL_TIMEOUT_ARGS = ["--connect-timeout", "10", "--max-time", "25"]
+SUBPROCESS_TIMEOUT = 35
+
+
 def curl_get(url, extra_headers=None):
-    cmd = ["curl", "-s", "-A", UA]
+    cmd = ["curl", "-s", "-A", UA, *CURL_TIMEOUT_ARGS]
     for h in (extra_headers or []):
         cmd += ["-H", h]
     cmd.append(url)
-    return subprocess.run(cmd, capture_output=True, text=True).stdout
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT).stdout
+    except subprocess.TimeoutExpired:
+        return ""
 
 
 def curl_post(url, data_str, extra_headers=None):
-    cmd = ["curl", "-s", "-A", UA, "-H", "Content-Type: application/x-www-form-urlencoded"]
+    cmd = ["curl", "-s", "-A", UA, *CURL_TIMEOUT_ARGS, "-H", "Content-Type: application/x-www-form-urlencoded"]
     for h in (extra_headers or []):
         cmd += ["-H", h]
     cmd += ["--data-binary", data_str, url]
-    return subprocess.run(cmd, capture_output=True, text=True).stdout
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT).stdout
+    except subprocess.TimeoutExpired:
+        return ""
 
 
 def to_utf8(euc_kr_bytes_text):
@@ -108,8 +124,11 @@ def to_utf8(euc_kr_bytes_text):
 
 
 def curl_get_bytes(url):
-    cmd = ["curl", "-s", "-A", UA, url]
-    return subprocess.run(cmd, capture_output=True).stdout
+    cmd = ["curl", "-s", "-A", UA, *CURL_TIMEOUT_ARGS, url]
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=SUBPROCESS_TIMEOUT).stdout
+    except subprocess.TimeoutExpired:
+        return b""
 
 
 # ---------------------------------------------------------------------------
