@@ -11,6 +11,7 @@ Pages to serve.
 import json
 import re
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -37,7 +38,7 @@ COMPLEXES = [
 ]
 
 
-def fetch_complex(name):
+def _fetch_complex_once(name):
     cached = COMPLEX_CACHE.get(name, {})
     region_cd = cached.get("region_cd")
     neonet_cc = cached.get("neonet_complex_cd")
@@ -64,6 +65,27 @@ def fetch_complex(name):
             "note": r.get("note", ""),
         })
     return combined
+
+
+def fetch_complex(name, attempts=2):
+    """Some environments (observed repeatedly on GitHub Actions runners,
+    not locally) see inconsistent per-request slowness/packet loss against
+    these sites that a single higher timeout doesn't fully absorb - repeat
+    runs came back with different, sometimes 20-30% lower, row counts than
+    a local fetch of the same complex at the same moment. Retrying the
+    whole complex and keeping the attempt with the most rows is a blunt
+    but effective mitigation: pagination loops in neonet_fetch/tencomz_fetch
+    stop early on a failed/empty request, so more rows reliably means a
+    more complete fetch, not just noise."""
+    best = []
+    for i in range(attempts):
+        rows = _fetch_complex_once(name)
+        print(f"  attempt {i+1}/{attempts}: {len(rows)} rows", file=sys.stderr)
+        if len(rows) > len(best):
+            best = rows
+        if i < attempts - 1:
+            time.sleep(2)
+    return best
 
 
 def main():
