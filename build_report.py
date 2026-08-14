@@ -11,7 +11,10 @@ Pages to serve.
 import json
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+KST = timezone(timedelta(hours=9))
 
 sys.path.insert(0, str(Path(__file__).parent))
 from pipeline import (
@@ -89,6 +92,12 @@ def main():
         print(f"ERROR: expected exactly 1 listing-data script tag, found {n}",
               file=sys.stderr)
         sys.exit(1)
+
+    build_time = datetime.now(KST).strftime("%Y-%m-%d %H:%M KST")
+    if "__BUILD_TIME__" not in html:
+        print("WARNING: __BUILD_TIME__ placeholder not found in template",
+              file=sys.stderr)
+    html = html.replace("__BUILD_TIME__", build_time)
 
     OUTPUT.parent.mkdir(exist_ok=True)
     OUTPUT.write_text(html, encoding="utf-8")
