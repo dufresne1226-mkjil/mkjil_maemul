@@ -587,7 +587,8 @@
     var coverageEl = document.getElementById("coverage");
     var summaryEl = document.getElementById("summary");
 
-    var state = { complex: complexNames[0], trade: "전체", dong: "" };
+    var defaultComplex = complexNames.indexOf("디큐브시티") >= 0 ? "디큐브시티" : complexNames[0];
+    var state = { complex: defaultComplex, trade: "전체", dong: "" };
 
     var SUB_TEXT = {
       "목동신시가지11단지": "서울 양천구 신정동 · 재건축 정비구역",
