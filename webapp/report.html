@@ -1,3 +1,4 @@
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>매물대장 · 목동·신도림 4개 단지</title>
 <style>
   :root {
@@ -374,13 +375,6 @@
     display: inline-block;
   }
 
-  .src-tag {
-    font-size: 10.5px;
-    letter-spacing: 0.03em;
-    color: var(--ink-faint);
-    text-transform: uppercase;
-  }
-
   .empty-state {
     padding: 48px 20px;
     text-align: center;
@@ -416,8 +410,10 @@
     .table-scroll { overflow-x: visible; border: none; }
     table { min-width: 0; }
     thead { display: none; }
-    tbody, tr, td { display: block; width: 100%; }
+    tbody, td { display: block; width: 100%; }
     tbody tr {
+      display: flex;
+      flex-wrap: wrap;
       border: 1px solid var(--paper-line);
       border-radius: 3px;
       margin-bottom: 10px;
@@ -432,6 +428,8 @@
       justify-content: space-between;
       align-items: baseline;
       gap: 14px;
+      flex: 1 1 100%;
+      width: auto;
     }
     tbody tr td:last-child { border-bottom: none; }
     tbody td::before {
@@ -442,18 +440,45 @@
       color: var(--ink-soft);
       flex: 0 0 auto;
     }
-    tbody td.c-price {
-      font-size: 16px;
-      background: var(--paper-deep);
-      margin: 2px -14px;
-      padding: 10px 14px;
-      border-bottom: none;
-    }
-    tbody td.c-price::before { color: var(--ink-soft); text-transform: uppercase; }
-    tbody td.c-note {
+
+    /* 평형/전용면적/동/층: 4개 항목을 한 줄에 나란히 묶기 */
+    tbody td.c-num {
+      flex: 1 1 25%;
       flex-direction: column;
       align-items: flex-start;
+      gap: 1px;
+      padding: 9px 6px 7px 0;
+    }
+    tbody td.c-num::before { font-size: 10px; }
+
+    /* 가격 + 확인일: 강조 배경 안에서 한 줄로 묶기 */
+    tbody td.c-price {
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--stamp);
+      background: var(--paper-deep);
+      margin: 2px 0 2px -14px;
+      padding: 10px 8px 10px 14px;
+      border-bottom: none;
+      flex: 1 1 auto;
+    }
+    tbody td.c-price::before { color: var(--ink-soft); text-transform: uppercase; }
+
+    tbody td.c-date {
+      background: var(--paper-deep);
+      margin: 2px -14px 2px 0;
+      padding: 10px 14px 10px 4px;
+      border-bottom: none;
+      flex: 0 0 auto;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+    tbody td.c-note {
+      flex-direction: column;
+      align-items: stretch;
       gap: 4px;
+      flex: 1 1 100%;
+      max-width: none;
     }
     tbody td.c-note:empty { display: none; }
   }
@@ -747,7 +772,7 @@
       var table = document.createElement("table");
       table.innerHTML =
         "<thead><tr>" +
-        "<th>평형</th><th>전용면적</th><th>동</th><th>층</th><th>가격</th><th>확인일</th><th>비고</th><th>출처</th>" +
+        "<th>평형</th><th>전용면적</th><th>동</th><th>층</th><th>가격</th><th>확인일</th><th>비고</th>" +
         "</tr></thead>";
       var tbody = document.createElement("tbody");
       rows.forEach(function (r) {
@@ -758,9 +783,8 @@
           '<td class="c-num" data-label="동">' + escapeHtml(r.dong) + "</td>" +
           '<td class="c-num" data-label="층">' + escapeHtml(r.floor || "-") + "</td>" +
           '<td class="c-price" data-label="가격">' + fmtPrice(r) + "</td>" +
-          '<td data-label="확인일"><span class="stamp-date">' + fmtDate(r.date) + "</span></td>" +
-          '<td class="c-note" data-label="비고">' + escapeHtml(r.note || "") + "</td>" +
-          '<td class="src-tag" data-label="출처">' + escapeHtml(r.source) + "</td>";
+          '<td class="c-date" data-label="확인일"><span class="stamp-date">' + fmtDate(r.date) + "</span></td>" +
+          '<td class="c-note" data-label="비고">' + escapeHtml(r.note || "") + "</td>";
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
