@@ -144,43 +144,49 @@ def neonet_resolve(complex_name):
 def neonet_fetch(region_cd, complex_cd, max_pages=30):
     """Paginate NEONET's OfferingsList.neo until an empty page. Returns raw
     parsed rows (NOT deduped - same physical unit re-appears once per day it
-    was re-confirmed by the agent)."""
+    was re-confirmed by the agent).
+
+    NEONET's mobile listing feed is split by offer_gbn: "P" returns 매매+월세,
+    "L" returns 전세 - there is no single "all trade types" value. Fetching
+    only "P" (as this used to) silently drops every 전세 listing. Fetch both
+    and merge."""
     rows = []
-    for page in range(1, max_pages + 1):
-        url = (
-            "https://m.neonet.co.kr/novo-mobile/view/offerings/OfferingsList.neo"
-            f"?offerings_gbn=AT&offer_gbn=P&region_cd={region_cd}&complex_cd={complex_cd}&page={page}"
-        )
-        html = curl_get_bytes(url).decode("euc-kr", errors="ignore")
-        blocks = html.split('class="offer_contents"')[1:]
-        if not blocks:
-            break
-        for b in blocks:
-            # dong label isn't always numeric - 디큐브시티 등 주상복합은 "A동"/"B동"처럼
-            # 알파벳을 쓴다. 숫자든 문자든 "...동</p>" 앞의 마지막 토큰을 잡는다.
-            dong = re.search(r'([A-Za-z0-9]+동)\s*</p>', b)
-            trade = re.search(r'offer_prc[^>]*>\s*([가-힣]+)\s+([\d,]+)(?:\s*/\s*([\d,]+))?만', b)
-            area = re.search(r'>\s*([\d.]+)\s*\n?\s*/([\d.]+)㎡,\s*\n?\s*([^\n,]+?)\s*,\s*([가-힣]+)\s*\n', b)
-            # NEONET's floor text is e.g. "중층/15층" or "3층/15층" - strip to bare "N/M"
-            # so it matches Tencomz's plain "3/15" and the report's added "층" suffix
-            # doesn't double up.
-            note = re.search(r'font-size:14px;">([^<]+)</p>', b)
-            date = re.search(r'확인\s*([\d.]+)', b)
-            if not (dong and trade and area):
-                continue
-            floor_raw = area.group(3).strip()
-            floor_nums = re.findall(r'\d+', floor_raw)
-            floor_norm = "/".join(floor_nums) if len(floor_nums) == 2 else floor_raw
-            rows.append({
-                "source": "neonet", "dong": dong.group(1), "trade": trade.group(1),
-                "price1": trade.group(2).replace(",", ""),
-                "price2": trade.group(3).replace(",", "") if trade.group(3) else None,
-                "supply": float(area.group(1)), "exclusive": float(area.group(2)),
-                "floor": floor_norm, "dir": area.group(4),
-                "note": note.group(1).strip() if note else "",
-                "date": date.group(1).rstrip(".") if date else "",
-            })
-        time.sleep(0.2)
+    for offer_gbn in ("P", "L"):
+        for page in range(1, max_pages + 1):
+            url = (
+                "https://m.neonet.co.kr/novo-mobile/view/offerings/OfferingsList.neo"
+                f"?offerings_gbn=AT&offer_gbn={offer_gbn}&region_cd={region_cd}&complex_cd={complex_cd}&page={page}"
+            )
+            html = curl_get_bytes(url).decode("euc-kr", errors="ignore")
+            blocks = html.split('class="offer_contents"')[1:]
+            if not blocks:
+                break
+            for b in blocks:
+                # dong label isn't always numeric - 디큐브시티 등 주상복합은 "A동"/"B동"처럼
+                # 알파벳을 쓴다. 숫자든 문자든 "...동</p>" 앞의 마지막 토큰을 잡는다.
+                dong = re.search(r'([A-Za-z0-9]+동)\s*</p>', b)
+                trade = re.search(r'offer_prc[^>]*>\s*([가-힣]+)\s+([\d,]+)(?:\s*/\s*([\d,]+))?만', b)
+                area = re.search(r'>\s*([\d.]+)\s*\n?\s*/([\d.]+)㎡,\s*\n?\s*([^\n,]+?)\s*,\s*([가-힣]+)\s*\n', b)
+                # NEONET's floor text is e.g. "중층/15층" or "3층/15층" - strip to bare "N/M"
+                # so it matches Tencomz's plain "3/15" and the report's added "층" suffix
+                # doesn't double up.
+                note = re.search(r'font-size:14px;">([^<]+)</p>', b)
+                date = re.search(r'확인\s*([\d.]+)', b)
+                if not (dong and trade and area):
+                    continue
+                floor_raw = area.group(3).strip()
+                floor_nums = re.findall(r'\d+', floor_raw)
+                floor_norm = "/".join(floor_nums) if len(floor_nums) == 2 else floor_raw
+                rows.append({
+                    "source": "neonet", "dong": dong.group(1), "trade": trade.group(1),
+                    "price1": trade.group(2).replace(",", ""),
+                    "price2": trade.group(3).replace(",", "") if trade.group(3) else None,
+                    "supply": float(area.group(1)), "exclusive": float(area.group(2)),
+                    "floor": floor_norm, "dir": area.group(4),
+                    "note": note.group(1).strip() if note else "",
+                    "date": date.group(1).rstrip(".") if date else "",
+                })
+            time.sleep(0.2)
     return rows
 
 
