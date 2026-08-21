@@ -11,6 +11,7 @@ Pages to serve.
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -65,7 +66,15 @@ def fetch_complex(name):
 
 def main():
     data = {}
-    for name in COMPLEXES:
+    for i, name in enumerate(COMPLEXES):
+        if i > 0:
+            # GitHub Actions' shared runner IPs get measurably less complete
+            # results than a local/interactive session's IP for the same
+            # requests (see project memory) - a longer gap between complexes
+            # is being tried here to see if it reads as less bot-like than
+            # the earlier 3s pacing did. No extra requests added, just spaced
+            # out more.
+            time.sleep(15)
         rows = fetch_complex(name)
         data[name] = rows
         print(f"{name}: {len(rows)} rows", file=sys.stderr)
