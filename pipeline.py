@@ -63,11 +63,12 @@ PYEONG = 3.305785
 # Cache of already-resolved complex/region codes so repeat queries skip the
 # resolution round-trip. Add to this as new complexes get resolved.
 COMPLEX_CACHE = {
-    "목동신시가지13단지": {"region_cd": "1147010100", "neonet_complex_cd": "A0001277", "tencomz_aptno": "438"},
-    "목동신시가지11단지": {"region_cd": "1147010100", "neonet_complex_cd": "A0001507", "tencomz_aptno": "22959"},
-    "목동신시가지12단지": {"region_cd": "1147010100", "neonet_complex_cd": "A0008099", "tencomz_aptno": "666"},
-    "목동힐스테이트": {"region_cd": "1147010100", "neonet_complex_cd": "A1006461", "tencomz_aptno": "108438"},
-    "래미안목동아델리체": {"region_cd": "1147010100", "neonet_complex_cd": "A0037207", "tencomz_aptno": "121979"},
+    "목동신시가지13단지": {"region_cd": "1147010100", "neonet_complex_cd": "A0001277", "tencomz_aptno": "438", "asil_code": "3278"},
+    "목동신시가지11단지": {"region_cd": "1147010100", "neonet_complex_cd": "A0001507", "tencomz_aptno": "22959", "asil_code": "3276"},
+    "목동신시가지12단지": {"region_cd": "1147010100", "neonet_complex_cd": "A0008099", "tencomz_aptno": "666", "asil_code": "3277"},
+    "목동힐스테이트": {"region_cd": "1147010100", "neonet_complex_cd": "A1006461", "tencomz_aptno": "108438", "asil_code": "20336186"},
+    "래미안목동아델리체": {"region_cd": "1147010100", "neonet_complex_cd": "A0037207", "tencomz_aptno": "121979", "asil_code": "1500060913"},
+    "디큐브시티": {"region_cd": "1153010100", "neonet_complex_cd": "A0033011", "asil_code": "20141047"},
 }
 
 # 법정동코드 cache for region-only mode (no named complex), so a known area
@@ -334,6 +335,83 @@ def hanbang_fetch(complex_name, outmax=50):
 
 
 # ---------------------------------------------------------------------------
+# asil (asil.kr) - aggregates Naver's listing pool, so it catches agent
+# listings that NEONET/Tencomz/Hanbang miss (Naver itself is hard-blocked,
+# but asil proxies it through its own JSON API). Reverse-engineered:
+#   apt code:  https://asil.kr/asil/include/apt_li.jsp?code=<법정동코드>
+#              (parse searchApt(this,<asilCode>,'<name>',...) from the HTML)
+#   listings:  https://realty.asil.kr/api_asil/data_sale_of_apt.aspx?...
+#              &dealmode=A01(매매)|B01(전세)|B02,B03(월세+단기) -> list_result[]
+# ---------------------------------------------------------------------------
+
+# Constant premium-exclusion param baked into asil's own front-end JS; the
+# listing API returns an empty shell without it.
+ASIL_PREMINUM = "-25940,-22763"
+
+
+def asil_resolve_code(region_cd, complex_name):
+    """Look up asil's internal building code for a complex by 법정동코드 +
+    name substring. Returns the code string or None."""
+    url = f"https://asil.kr/asil/include/apt_li.jsp?code={region_cd}"
+    body = curl_get_bytes(url).decode("euc-kr", errors="ignore")
+    for m in re.finditer(r"searchApt\(this,\s*(\d+),\s*\\?'([^'\\]+)", body):
+        if complex_name in m.group(2):
+            return m.group(1)
+    return None
+
+
+def asil_fetch(asil_code, max_total=100):
+    """Pull current listings for one complex from asil's JSON API. One request
+    per trade group (매매/전세/월세) merged into the pipeline's row format."""
+    rows = []
+    for dealmode in ("A01", "B01", "B02,B03"):
+        ts = str(int(time.time() * 1000))
+        params = (
+            f"asil_bldcode={asil_code}&focus_bldcode={asil_code}&oidx=1&oby=down"
+            f"&total={max_total}&dealmode={dealmode}&dong=&user=&ptp_no="
+            f"&asil_preminum={ASIL_PREMINUM}&asil_focus=&last_mm_num=0&{ts}"
+        )
+        url = f"https://realty.asil.kr/api_asil/data_sale_of_apt.aspx?{params}"
+        body = curl_get(url, extra_headers=["Referer: https://asil.kr/"])
+        try:
+            items = json.loads(body).get("list_result") or []
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            items = []
+        for it in items:
+            trade = it.get("DEALTYPE_NM")
+            try:
+                supply = float(it.get("SPLY_SPC") or 0)
+                exclusive = float(it.get("EXCLS_SPC") or 0)
+            except (TypeError, ValueError):
+                continue
+            if trade == "매매":
+                price1 = str(it.get("DEAL_AMT", "")).replace(",", "")
+                price2 = None
+            elif trade == "전세":
+                price1 = str(it.get("WRRNT_AMT", "")).replace(",", "")
+                price2 = None
+            else:  # 월세/단기 - 보증금 + 월차임
+                price1 = str(it.get("WRRNT_AMT", "")).replace(",", "")
+                lease = str(it.get("LEASE_AMT", "")).replace(",", "")
+                price2 = lease or None
+            dong = (it.get("BDONG_NM") or "").strip()
+            if dong and not dong.endswith("동"):
+                dong += "동"
+            floor = f"{it.get('CORES_FLR_CNT', '')}/{it.get('TOT_FLR_CNT', '')}"
+            # SVC_DATE_STRT is "2026-08-22" -> normalize to "26.08.22" like the others
+            d = (it.get("SVC_DATE_STRT") or "").replace("-", ".")
+            date = d[2:] if len(d) == 10 else d
+            rows.append({
+                "source": "asil", "trade": trade, "dong": dong, "floor": floor,
+                "supply": supply, "exclusive": exclusive,
+                "price1": price1, "price2": price2,
+                "date": date, "note": (it.get("FETR_DESC") or "").strip(),
+            })
+        time.sleep(0.3)
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # Merge + report
 # ---------------------------------------------------------------------------
 
@@ -345,6 +423,35 @@ def dedupe_by_unit(rows):
         key = (r["source"], r["dong"], r.get("floor"), r["trade"], r.get("price1") or r.get("amt_sell"),
                r.get("price2") or r.get("amt_guar"))
         if key not in uniq or (r.get("date", "") > uniq[key].get("date", "")):
+            uniq[key] = r
+    return list(uniq.values())
+
+
+def _floor_num(floor):
+    """First (actual) floor number from labels like '46/51' or '중층/15층';
+    non-numeric labels (고층/중층/저층) are kept as-is so they don't all collapse."""
+    head = str(floor or "").split("/")[0]
+    m = re.search(r"\d+", head)
+    return m.group(0) if m else head.strip()
+
+
+def dedupe_cross_source(rows):
+    """Collapse the SAME physical unit that shows up on more than one source
+    (asil aggregates Naver, which overlaps NEONET/Tencomz heavily, so a raw
+    merge would double/triple-count). Keyed on trade + 전용면적 + actual floor +
+    price - deliberately drops source/dong-label/id since those differ across
+    sources. Prefers the row with the newest 확인 date, then a non-empty note."""
+    uniq = {}
+    for r in rows:
+        key = (r["trade"], round(float(r.get("exclusive") or 0), 1),
+               _floor_num(r.get("floor")), r.get("price1"), r.get("price2"))
+        cur = uniq.get(key)
+        if cur is None:
+            uniq[key] = r
+            continue
+        better = (r.get("date", "") > cur.get("date", "")) or (
+            r.get("date", "") == cur.get("date", "") and len(r.get("note") or "") > len(cur.get("note") or ""))
+        if better:
             uniq[key] = r
     return list(uniq.values())
 

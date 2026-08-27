@@ -16,7 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from pipeline import (
-    COMPLEX_CACHE, neonet_fetch, tencomz_fetch, dedupe_by_unit, to_pyeong,
+    COMPLEX_CACHE, neonet_fetch, tencomz_fetch, asil_fetch, asil_resolve_code,
+    dedupe_by_unit, dedupe_cross_source, to_pyeong,
 )
 
 REPO_ROOT = Path(__file__).parent
@@ -40,6 +41,7 @@ def fetch_complex(name):
     region_cd = cached.get("region_cd")
     neonet_cc = cached.get("neonet_complex_cd")
     tencomz_aptno = cached.get("tencomz_aptno")
+    asil_code = cached.get("asil_code")
 
     if not neonet_cc or not region_cd:
         from pipeline import neonet_resolve
@@ -48,12 +50,19 @@ def fetch_complex(name):
     if not tencomz_aptno:
         from pipeline import tencomz_resolve_aptno
         tencomz_aptno, _ = tencomz_resolve_aptno(region_cd, name)
+    if not asil_code and region_cd:
+        asil_code = asil_resolve_code(region_cd, name)
 
     neonet_rows = neonet_fetch(region_cd, neonet_cc) if neonet_cc else []
     tencomz_rows = tencomz_fetch(region_cd, tencomz_aptno) if tencomz_aptno else []
+    asil_rows = asil_fetch(asil_code) if asil_code else []
 
+    # dedupe within each source first, then across sources (asil aggregates
+    # Naver, which overlaps NEONET/Tencomz heavily - a raw merge triple-counts).
+    merged = (dedupe_by_unit(neonet_rows) + dedupe_by_unit(tencomz_rows)
+              + dedupe_by_unit(asil_rows))
     combined = []
-    for r in dedupe_by_unit(neonet_rows) + dedupe_by_unit(tencomz_rows):
+    for r in dedupe_cross_source(merged):
         combined.append({
             "source": r["source"], "trade": r["trade"], "dong": r["dong"],
             "floor": r.get("floor", ""), "pyeong": to_pyeong(r["supply"]),
