@@ -449,20 +449,61 @@ def dedupe_cross_source(rows):
     exist in several 동, and dropping 동 wrongly collapses them into one (e.g.
     목동11단지 66㎡ 11층 21억 exists in 1102/1104/1106동). Source/id/dong-suffix
     are normalized away. Prefers the newest 확인 date, then a non-empty note."""
+    def _better(a, b):
+        return (a.get("date", "") > b.get("date", "")) or (
+            a.get("date", "") == b.get("date", "")
+            and len(a.get("note") or "") > len(b.get("note") or ""))
+
+    # Pass 1: strong exact key (both sides have a real floor and matching area).
     uniq = {}
+    order = []
     for r in rows:
         key = (r["trade"], round(float(r.get("exclusive") or 0), 1),
                _dong_norm(r.get("dong")),
                _floor_num(r.get("floor")), r.get("price1"), r.get("price2"))
-        cur = uniq.get(key)
-        if cur is None:
+        if key not in uniq:
             uniq[key] = r
-            continue
-        better = (r.get("date", "") > cur.get("date", "")) or (
-            r.get("date", "") == cur.get("date", "") and len(r.get("note") or "") > len(cur.get("note") or ""))
-        if better:
+            order.append(key)
+        elif _better(r, uniq[key]):
             uniq[key] = r
-    return list(uniq.values())
+    kept = [uniq[k] for k in order]
+
+    # Pass 2: absorb a floor-less row into an already-kept twin. Hanbang often
+    # omits BOTH floor and 동, and reports the "type" 전용면적 (84.0 where asil has
+    # the precise 84.96), so pass 1 can't match it. Since dedup runs per-complex,
+    # a floor-less row matching an existing row on 거래+가격 with area within 2㎡ is
+    # the same unit cross-listed; drop it. 동 is only enforced when BOTH rows have
+    # one. Floor-bearing rows are added first so floor-less ones can find them.
+    def _floorless(r):
+        return _floor_num(r.get("floor")) in ("", "None", "-")
+
+    def _area(r):
+        return float(r.get("exclusive") or 0)
+
+    from collections import defaultdict
+    kept.sort(key=_floorless)  # floor-bearing rows first
+    idx = defaultdict(list)    # (trade,price1,price2) -> kept rows
+    final = []
+    for r in kept:
+        if _floorless(r):
+            k = (r["trade"], r.get("price1"), r.get("price2"))
+            rdong = _dong_norm(r.get("dong"))
+            twin = None
+            for o in idx.get(k, []):
+                if abs(_area(o) - _area(r)) > 2.0:
+                    continue
+                odong = _dong_norm(o.get("dong"))
+                if rdong and odong and rdong != odong:
+                    continue
+                twin = o
+                break
+            if twin is not None:
+                if not (twin.get("note") or "") and r.get("note"):
+                    twin["note"] = r["note"]
+                continue
+        final.append(r)
+        idx[(r["trade"], r.get("price1"), r.get("price2"))].append(r)
+    return final
 
 
 def to_pyeong(m2):

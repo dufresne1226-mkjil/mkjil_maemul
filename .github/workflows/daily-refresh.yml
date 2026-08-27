@@ -35,11 +35,14 @@ jobs:
       - name: Build report
         run: python3 build_report.py
 
+      - name: Build 신도림 전세/월세 시세 (best-effort - don't fail the deploy)
+        run: python3 sindorim_report.py || echo "sindorim_report failed, keeping previous docs/sindorim.html"
+
       - name: Commit updated report
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html
+          git add docs/index.html docs/sindorim.html
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
