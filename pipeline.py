@@ -435,15 +435,24 @@ def _floor_num(floor):
     return m.group(0) if m else head.strip()
 
 
+def _dong_norm(dong):
+    """Normalize a 동 label so it matches across sources: 'A동'/'a동'->'A',
+    '1102동'->'1102', '802'->'802'. Blank stays blank."""
+    return str(dong or "").replace("동", "").strip().upper()
+
+
 def dedupe_cross_source(rows):
     """Collapse the SAME physical unit that shows up on more than one source
     (asil aggregates Naver, which overlaps NEONET/Tencomz heavily, so a raw
-    merge would double/triple-count). Keyed on trade + 전용면적 + actual floor +
-    price - deliberately drops source/dong-label/id since those differ across
-    sources. Prefers the row with the newest 확인 date, then a non-empty note."""
+    merge would double/triple-count). Keyed on trade + 전용면적 + 동 + actual floor
+    + price. 동 is included on purpose: in big complexes the same 면적/층/가격 can
+    exist in several 동, and dropping 동 wrongly collapses them into one (e.g.
+    목동11단지 66㎡ 11층 21억 exists in 1102/1104/1106동). Source/id/dong-suffix
+    are normalized away. Prefers the newest 확인 date, then a non-empty note."""
     uniq = {}
     for r in rows:
         key = (r["trade"], round(float(r.get("exclusive") or 0), 1),
+               _dong_norm(r.get("dong")),
                _floor_num(r.get("floor")), r.get("price1"), r.get("price2"))
         cur = uniq.get(key)
         if cur is None:
