@@ -97,7 +97,38 @@ def tier(ex):
     return (2, "전용 55~79㎡ · 중형")
 
 
+HANBANG_STALE_DAYS = 14  # 협회 단독 매물이 이만큼 오래되면 유령매물로 보고 제외
+
+
+def _parse_date(s):
+    """'26.08.08' or '2026-08-22' -> date, else None."""
+    s = (s or "").strip().replace("-", ".")
+    parts = s.split(".")
+    try:
+        if len(parts) == 3:
+            y, m, d = (int(p) for p in parts)
+            if y < 100:
+                y += 2000
+            return datetime(y, m, d, tzinfo=KST).date()
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
+def _is_stale_hanbang(row, today):
+    """asil(네이버)은 신선도가 유지되니 나이 무관; 한방 단독 매물만 오래되면 제외.
+    Naver rarely keeps ghosts, so a hanbang-only listing that's weeks old with no
+    Naver presence is very likely already gone (see 태영 59㎡ case)."""
+    if row.get("source") != "hanbang":
+        return False
+    d = _parse_date(row.get("date"))
+    if d is None:
+        return False
+    return (today - d).days > HANBANG_STALE_DAYS
+
+
 def collect():
+    today = datetime.now(KST).date()
     listings = []
     for name, acode, hname, dist, year in NEIGHBORHOOD:
         rows = []
@@ -107,14 +138,15 @@ def collect():
             rows += dedupe_cross_source(a + h)
         for r in rows:
             ex = float(r.get("exclusive") or 0)
-            if not keep(ex):
+            if not keep(ex) or _is_stale_hanbang(r, today):
                 continue
             listings.append({
                 "name": name, "dist": dist, "year": year, "ex": ex,
                 "trade": r["trade"], "floor": r.get("floor") or "",
                 "dep": _to_int(r.get("price1")) or 0,
                 "wol": _to_int(r.get("price2")) if r["trade"] == "월세" else None,
-                "eq": jeonse_equiv(r),
+                "eq": jeonse_equiv(r), "date": r.get("date", ""),
+                "source": r.get("source", ""),
             })
         time.sleep(0.2)
     return listings
@@ -126,6 +158,12 @@ def _eok(manwon):
 
 def floor_disp(f):
     return f if f and "None" not in f else "—"
+
+
+def date_disp(d):
+    """'26.08.24' -> '08.24'; else '—'."""
+    p = (d or "").split(".")
+    return f"{p[1]}.{p[2]}" if len(p) == 3 else "—"
 
 
 def render(listings):
@@ -152,11 +190,12 @@ def render(listings):
                 f'<td class="c-num" data-label="준공">{r["year"]}</td>'
                 f'<td class="c-num" data-label="전용">{r["ex"]:.0f}㎡</td>'
                 f'<td class="c-num" data-label="층">{floor_disp(r["floor"])}</td>'
+                f'<td class="c-num" data-label="등록일">{date_disp(r["date"])}</td>'
                 f'</tr>')
         sections.append(
             f'<h2>{_html.escape(key[1])} <span class="cnt">{len(rows)}건</span></h2>'
             f'<div class="table-scroll"><table><thead><tr>'
-            f'<th>전세가(환산)</th><th>보증금/월</th><th>단지</th><th>거리</th><th>준공</th><th>전용</th><th>층</th>'
+            f'<th>전세가(환산)</th><th>보증금/월</th><th>단지</th><th>거리</th><th>준공</th><th>전용</th><th>층</th><th>등록일</th>'
             f'</tr></thead><tbody>' + "".join(trs) + '</tbody></table></div>')
 
     total = len(listings)
@@ -214,6 +253,7 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
   <footer>
     전세가(환산): 월세는 보증금 + 월세(만원)÷40으로 전세 상당액 환산 (월 40만원 ≈ 1억). "보증금/월" 칸이 채워진 게 월세.<br>
     "—" 층은 한방(협회) 매물로 층 정보가 없는 건. 신구로자이(소형 주상복합)는 비교군에서 제외.<br>
+    네이버에 없고 협회에만 등록된 매물 중 14일 넘은 건은 유령매물 가능성이 높아 자동 제외(네이버 매물은 등록일 무관 유지).<br>
     매물은 나오는 즉시 계약돼 빠질 수 있어 실시간과 시차가 있을 수 있음. 참고용.
   </footer>
 </div>
