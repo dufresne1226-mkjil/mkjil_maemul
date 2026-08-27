@@ -186,7 +186,7 @@ def render(listings):
                 f'<td class="c-eq" data-label="전세가(환산)">{_eok(r["eq"])}억</td>'
                 f'<td class="c-w" data-label="보증금/월">{wol}</td>'
                 f'<td data-label="단지">{_html.escape(r["name"])}{you}{mark}</td>'
-                f'<td class="c-num" data-label="거리">{r["dist"]}m</td>'
+                f'<td class="c-dist" data-label="거리">{r["dist"]}m</td>'
                 f'<td class="c-num" data-label="준공">{r["year"]}</td>'
                 f'<td class="c-num" data-label="전용">{r["ex"]:.0f}㎡</td>'
                 f'<td class="c-num" data-label="층">{floor_disp(r["floor"])}</td>'
@@ -195,7 +195,7 @@ def render(listings):
         sections.append(
             f'<h2>{_html.escape(key[1])} <span class="cnt">{len(rows)}건</span></h2>'
             f'<div class="table-scroll"><table><thead><tr>'
-            f'<th>전세가(환산)</th><th>보증금/월</th><th>단지</th><th>거리</th><th>준공</th><th>전용</th><th>층</th><th>등록일</th>'
+            f'<th>전세가(환산)</th><th>보증금/월</th><th>단지</th><th class="th-dist">거리</th><th>준공</th><th>전용</th><th>층</th><th>등록일</th>'
             f'</tr></thead><tbody>' + "".join(trs) + '</tbody></table></div>')
 
     total = len(listings)
@@ -223,10 +223,12 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
   .table-scroll{overflow-x:auto}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th{text-align:left;font-size:11px;letter-spacing:.03em;color:var(--ink-soft);text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th.th-dist{text-align:right}
   td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
   .c-eq{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
   .c-w{color:var(--wolse);font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap}
   .c-num{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink-soft)}
+  .c-dist{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink-soft);text-align:right}
   .tag-w{background:var(--wolse);color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;vertical-align:middle}
   .tag-me{background:var(--me);color:#fff;font-size:10px;padding:1px 5px;border-radius:3px}
   .row-me td{background:var(--paper-deep)}
