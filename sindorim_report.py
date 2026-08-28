@@ -3,14 +3,15 @@
 Build docs/sindorim.html - a daily 전세/월세 시세표 for the apartment complexes
 around 디큐브시티 (신도림/구로 일대), benchmarking against the user's 디큐브 unit.
 
-Source: asil + 부동산써브(serve.co.kr) union. Both mirror Naver but cover DIFFERENT
-agent sets and are complementary — asil only shows its partner agents (verified: its
-listings == the complex's prtn_option 1:1), while serve indexes a different set and
-even lacks some complexes asil has. Neither alone is complete: serve catches 태영타운
-전세/월세 that asil's partner-network misses; asil catches 신도림7차/대림 that serve
-doesn't index. Union both, then cross-source dedup.
-Hanbang (협회) stays dropped: every page-scope 한방-only listing turned out to be a
-ghost/error with no Naver/serve backing (SK뷰 84㎡ 2.8억 typo, 태영 59㎡ stale).
+Source: 4-way union of asil / 부동산써브(serve.co.kr) / NEONET(부동산뱅크) / 텐컴즈,
+cross-source-deduped. None of the four is complete on its own - each covers a
+different agent set and misses what the others catch (verified: 태영타운 전세/월세
+only on serve; 디큐브 매매 richest on asil; 동아3차 84㎡ 9.0억 전세 only on NEONET).
+Hanbang (협회) stays dropped: every page-scope 한방-only listing was a ghost/error
+with no backing on any of the four (SK뷰 84㎡ 2.8억 typo, 태영 59㎡ stale).
+
+NB: serve.co.kr blocks GitHub Actions' datacenter IP, so this page is regenerated
+interactively (not in the daily workflow) and just committed/deployed as-is.
 
 Filter (fixed): 전용 ≥ 55㎡, exclude the 80㎡대 (80.0~83.9, keeps 84 국민평형),
 신구로자이 excluded entirely (소형 주상복합, not comparable).
@@ -25,7 +26,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from pipeline import asil_fetch, serve_fetch_ldong, dedupe_by_unit, dedupe_cross_source
+from pipeline import (asil_fetch, serve_fetch_ldong, neonet_fetch, tencomz_fetch,
+                      dedupe_by_unit, dedupe_cross_source)
 
 KST = timezone(timedelta(hours=9))
 REPO_ROOT = Path(__file__).parent
@@ -46,24 +48,26 @@ COLGROUP = (
 # 써브 매물을 담아둔 법정동들 (한 번씩만 긁어서 aptNo로 매칭). 신도림동+구로동.
 SERVE_LDONGS = ["1153010100", "1153010200"]
 
-# (표시명, asil코드, 써브aptNo(None=써브가 인덱싱안함), 디큐브로부터 직선거리 m, 준공연도)
-# asil·써브는 상보적: 써브는 태영 등을, asil은 신도림7차/대림 등을 각각 커버.
+# 4소스 합집합. 어느 하나도 완전하지 않고 서로 다른 걸 놓쳐서 넷 다 합침:
+#   asil / 써브(serve) / NEONET(부동산뱅크) / 텐컴즈
+# 각 코드: None = 그 소스가 이 단지를 인덱싱 안 함(→ 건너뜀).
+# 필드: (표시명, 디큐브거리m, 준공, 법정동, asil, 써브aptNo, neonet_cc, 텐컴즈aptno)
 NEIGHBORHOOD = [
-    ("신도림디큐브시티", 20141047, "27310", 0, 2011),
-    ("신도림동아2차", 2103, "3209", 258, 2000),
-    ("SK뷰", 20033986, "13084", 278, 2006),
-    ("신도림태영타운", 1985, "3204", 281, 2000),
-    ("신도림4차e편한세상", 52813, None, 310, 2003),
-    ("신도림동아3차", 2104, "3210", 430, 1995),
-    ("신도림현대(구로)", 1986, "9937", 479, 1994),
-    ("구로우성", 1992, "1072", 515, 1985),
-    ("신도림7차e편한세상", 249070, None, 554, 2004),
-    ("신도림동아1차", 2102, None, 593, 1999),
-    ("신도림우성3차", 50284, None, 643, 1993),
-    ("신도림5차e편한세상", 50668, None, 715, 2003),
-    ("신도림대림1,2차", 2099, None, 797, 1999),
-    ("신도림대림3차", 2101, None, 950, 2001),
-    ("신도림미성", 2105, None, 1100, 1989),
+    ("신도림디큐브시티", 0, 2011, "1153010100", 20141047, "27310", "A0033011", "27310"),
+    ("신도림동아2차", 258, 2000, "1153010100", 2103, "3209", "A0000631", "3209"),
+    ("SK뷰", 278, 2006, "1153010100", 20033986, "13084", "A0024394", "13085"),
+    ("신도림태영타운", 281, 2000, "1153010200", 1985, "3204", "A0012111", "3204"),
+    ("신도림4차e편한세상", 310, 2003, "1153010100", 52813, None, "A0012028", "3356"),
+    ("신도림동아3차", 430, 1995, "1153010100", 2104, "3210", "A0010991", "3210"),
+    ("신도림현대(구로)", 479, 1994, "1153010200", 1986, "9937", "A0000613", "125"),
+    ("구로우성", 515, 1985, "1153010200", 1992, "1072", "A0017259", "1072"),
+    ("신도림7차e편한세상", 554, 2004, "1153010100", 249070, None, "A0018647", "8919"),
+    ("신도림동아1차", 593, 1999, "1153010100", 2102, None, "A0000630", "1074"),
+    ("신도림우성3차", 643, 1993, "1153010100", 50284, None, "A0031752", "152"),
+    ("신도림5차e편한세상", 715, 2003, "1153010100", 50668, None, "A0018257", "8714"),
+    ("신도림대림1,2차", 797, 1999, "1153010100", 2099, None, "A0000629", "3354"),
+    ("신도림대림3차", 950, 2001, "1153010100", 2101, None, "A0011710", "3355"),
+    ("신도림미성", 1100, 1989, "1153010100", 2105, None, None, "149"),
 ]
 
 
@@ -103,11 +107,14 @@ def collect():
         serve_by_apt.update(serve_fetch_ldong(ldong))
 
     listings = []
-    for name, acode, serve_apt, dist, year in NEIGHBORHOOD:
-        asil_rows = dedupe_by_unit(asil_fetch(acode))
-        serve_rows = dedupe_by_unit(serve_by_apt.get(serve_apt, [])) if serve_apt else []
-        # asil·써브는 상보적이라 합치되, 같은 물건이 양쪽에 있으면 크로스디덥으로 1건 처리.
-        for r in dedupe_cross_source(asil_rows + serve_rows):
+    for name, dist, year, region, acode, serve_apt, neonet_cc, tenc_apt in NEIGHBORHOOD:
+        rows = []
+        rows += dedupe_by_unit(asil_fetch(acode)) if acode else []
+        rows += dedupe_by_unit(serve_by_apt.get(serve_apt, [])) if serve_apt else []
+        rows += dedupe_by_unit(neonet_fetch(region, neonet_cc)) if neonet_cc else []
+        rows += dedupe_by_unit(tencomz_fetch(region, tenc_apt)) if tenc_apt else []
+        # 4소스는 상보적이라 합치되, 같은 물건이 여러 소스에 있으면 크로스디덥으로 1건 처리.
+        for r in dedupe_cross_source(rows):
             if r["trade"] not in ("전세", "월세"):
                 continue
             ex = float(r.get("exclusive") or 0)
@@ -221,12 +228,12 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
     <a class="back" href="./index.html">← 내 매물 리포트</a>
     <h1>신도림 전세·월세 시세 <span style="font-size:14px;color:var(--ink-faint)">디큐브 인근 · __TOTAL__건</span></h1>
     <div class="sub">디큐브시티 반경 1.1km · 전용 55㎡↑ (80㎡대 제외) · 월세는 보증금+월세÷40으로 전세 환산</div>
-    <div class="build">마지막 갱신 <b>__BUILD_TIME__</b> · 출처 asil + 부동산써브 (네이버 통합) · 수동 갱신</div>
+    <div class="build">마지막 갱신 <b>__BUILD_TIME__</b> · 출처 asil+써브+NEONET+텐컴즈 4소스 합집합 · 수동 갱신</div>
   </header>
   __SECTIONS__
   <footer>
     전세가(환산): 월세는 보증금 + 월세(만원)÷40으로 전세 상당액 환산 (월 40만원 ≈ 1억). "보증금/월" 칸이 채워진 게 월세.<br>
-    출처는 asil + 부동산써브 합집합 (둘 다 네이버 기반이나 서로 다른 중개사망을 커버해 상보적 — 태영타운은 써브, 디큐브는 asil이 잡음). 같은 매물이 양쪽·여러 중개사에 중복등록돼도 1건으로 정리됨. 신구로자이(소형 주상복합)는 비교군에서 제외.<br>
+    출처는 asil·부동산써브·NEONET(부동산뱅크)·텐컴즈 4소스 합집합. 넷 다 서로 다른 매물을 놓쳐서(태영=써브, 디큐브=asil, 동아3차 84㎡=NEONET) 다 합침. 같은 매물이 양쪽·여러 중개사에 중복등록돼도 1건으로 정리됨. 신구로자이(소형 주상복합)는 비교군에서 제외.<br>
     매물은 나오는 즉시 계약돼 빠질 수 있어 실시간과 시차가 있을 수 있음. 참고용.
   </footer>
 </div>
