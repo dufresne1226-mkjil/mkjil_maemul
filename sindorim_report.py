@@ -221,7 +221,7 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
     <a class="back" href="./index.html">← 내 매물 리포트</a>
     <h1>신도림 전세·월세 시세 <span style="font-size:14px;color:var(--ink-faint)">디큐브 인근 · __TOTAL__건</span></h1>
     <div class="sub">디큐브시티 반경 1.1km · 전용 55㎡↑ (80㎡대 제외) · 월세는 보증금+월세÷40으로 전세 환산</div>
-    <div class="build">마지막 자동 갱신 <b>__BUILD_TIME__</b> · 출처 asil + 부동산써브 (네이버 통합)</div>
+    <div class="build">마지막 갱신 <b>__BUILD_TIME__</b> · 출처 asil + 부동산써브 (네이버 통합) · 수동 갱신</div>
   </header>
   __SECTIONS__
   <footer>
