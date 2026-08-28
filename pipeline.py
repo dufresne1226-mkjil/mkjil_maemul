@@ -56,6 +56,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+import uuid
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 PYEONG = 3.305785
@@ -409,6 +410,81 @@ def asil_fetch(asil_code, max_total=100):
             })
         time.sleep(0.3)
     return rows
+
+
+# ---------------------------------------------------------------------------
+# 부동산써브 (serve.co.kr) - another Naver mirror, COMPLEMENTARY to asil: each
+# covers a different agent set (e.g. serve has 태영타운 전세/월세 that asil's
+# partner-network misses; asil has complexes serve doesn't index at all). Union
+# both for the fullest picture. Reverse-engineered (see NOTES):
+#   - Vue SPA; API at www.serve.co.kr/<module>/v1/... , needs browser-ish headers
+#     (Sec-Fetch-*) + a serveUuid cookie or the gateway returns MW_E096.
+#   - listings:   /good/v1/map/getAtclList?tabNo=1&ldongCd=<법정동>&pageNum=N&offset=100
+#                 (paginate all of a 법정동; each row carries aptNo/aptNm/price)
+#   - complex map:/good/v1/map/getCmplxInfo?ldongCd=<법정동>  (aptNo <-> aptNm + counts)
+# ---------------------------------------------------------------------------
+
+SERVE_HEADERS = [
+    "-H", "Referer: https://www.serve.co.kr/good/map?m=1",
+    "-H", "Sec-Fetch-Site: same-origin", "-H", "Sec-Fetch-Mode: cors",
+    "-H", "Sec-Fetch-Dest: empty", "-H", "Accept: application/json, text/plain, */*",
+]
+
+
+def _serve_get(url):
+    uid = str(uuid.uuid4())
+    cmd = ["curl", "-s", "-A", UA, *CURL_TIMEOUT_ARGS, "-b", f"serveUuid={uid}",
+           *SERVE_HEADERS, url]
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=SUBPROCESS_TIMEOUT).stdout
+        return json.loads(out).get("data") or {}
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, TypeError, AttributeError):
+        return {}
+
+
+def _serve_amt_manwon(v):
+    try:
+        return str(int(str(v).replace(",", "")))
+    except (TypeError, ValueError):
+        return ""
+
+
+def serve_fetch_ldong(ldong_cd, max_articles=3000):
+    """Pull every 전세/월세/매매 listing in one 법정동 from serve, grouped by the
+    complex's serve aptNo. Returns {aptNo: [rows]} in the pipeline's row shape."""
+    base = "https://www.serve.co.kr/good/v1/map/getAtclList"
+    common = f"?tabNo=1&ldongCd={ldong_cd}&cuid=&orderCd=1"
+    total = _serve_get(f"{base}{common}&pageNum=0&offset=1").get("total", 0)
+    by_apt = {}
+    for pn in range(0, min(total, max_articles) + 1, 100):
+        items = _serve_get(f"{base}{common}&pageNum={pn}&offset=100").get("resultList") or []
+        if not items:
+            break
+        for it in items:
+            trade = it.get("dealKindCdNm")
+            if trade not in ("매매", "전세", "월세"):
+                continue
+            try:
+                supply = float(it.get("suplyArea") or 0)
+                exclusive = float(it.get("exusArea") or 0)
+            except (TypeError, ValueError):
+                continue
+            price1 = _serve_amt_manwon(it.get("bscTnthWuntAmt"))
+            price2 = _serve_amt_manwon(it.get("addTnthWuntAmt")) if trade == "월세" else None
+            dong = str(it.get("dongNm") or "").strip()
+            if dong and not dong.endswith("동"):
+                dong += "동"
+            floor = f"{it.get('flr1', '')}/{it.get('flr2', '')}".strip("/")
+            d = (it.get("atclRegDttm") or "")[:10].replace("-", ".")  # 2026-08-22 -> 2026.08.22
+            date = d[2:] if len(d) == 10 else d
+            note = (it.get("dtlDesc") or it.get("atclSfeCn") or it.get("mvnInfoCn") or "").strip()
+            by_apt.setdefault(str(it.get("aptNo")), []).append({
+                "source": "serve", "trade": trade, "dong": dong, "floor": floor,
+                "supply": supply, "exclusive": exclusive,
+                "price1": price1, "price2": price2, "date": date, "note": note,
+            })
+        time.sleep(0.2)
+    return by_apt
 
 
 # ---------------------------------------------------------------------------
