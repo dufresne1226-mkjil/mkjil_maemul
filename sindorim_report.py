@@ -27,6 +27,16 @@ OUTPUT = REPO_ROOT / "docs" / "sindorim.html"
 
 WOLSE_PER_EOK = 40  # 월세 40만원 ≈ 전세 1억 (환산 계수)
 
+# 세 개 tier 표가 세로줄이 딱 맞도록 모든 표에 동일한 고정 컬럼폭을 강제 (합 100%).
+# 순서: 전세가 · 보증금/월 · 단지 · 거리 · 준공 · 전용 · 층 · 등록일
+COLGROUP = (
+    "<colgroup>"
+    '<col style="width:10%"><col style="width:13%"><col style="width:34%">'
+    '<col style="width:8%"><col style="width:8%"><col style="width:8%">'
+    '<col style="width:10%"><col style="width:9%">'
+    "</colgroup>"
+)
+
 # (표시명, asil코드, 한방검색명, 디큐브로부터 직선거리 m, 준공연도)
 NEIGHBORHOOD = [
     ("신도림디큐브시티", 20141047, "신도림디큐브시티", 0, 2011),
@@ -194,7 +204,7 @@ def render(listings):
                 f'</tr>')
         sections.append(
             f'<h2>{_html.escape(key[1])} <span class="cnt">{len(rows)}건</span></h2>'
-            f'<div class="table-scroll"><table><thead><tr>'
+            f'<div class="table-scroll"><table>' + COLGROUP + '<thead><tr>'
             f'<th>전세가(환산)</th><th>보증금/월</th><th>단지</th><th class="th-dist">거리</th><th>준공</th><th>전용</th><th>층</th><th>등록일</th>'
             f'</tr></thead><tbody>' + "".join(trs) + '</tbody></table></div>')
 
@@ -221,7 +231,7 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
   h2{font-size:15px;margin:26px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line)}
   .cnt{font-size:12px;color:var(--ink-faint);font-weight:400}
   .table-scroll{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
   th{text-align:left;font-size:11px;letter-spacing:.03em;color:var(--ink-soft);text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   th.th-dist{text-align:right}
   td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
