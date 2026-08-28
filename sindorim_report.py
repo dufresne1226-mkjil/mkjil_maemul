@@ -3,8 +3,11 @@
 Build docs/sindorim.html - a daily 전세/월세 시세표 for the apartment complexes
 around 디큐브시티 (신도림/구로 일대), benchmarking against the user's 디큐브 unit.
 
-Sources: asil.kr (aggregates Naver) + Hanbang (한국공인중개사협회), unioned and
-cross-source-deduped - neither is complete on its own, so both are pulled.
+Source: asil.kr only (aggregates Naver, and dedups Naver's cross-agent duplicate
+registrations correctly). Hanbang (협회) was dropped: for the 신도림 complexes asil
+covers Naver accurately (verified on SK뷰), while 한방-only listings turned out to be
+mostly ghosts/errors (e.g. SK뷰 84㎡ 2.8억 typo, 태영 59㎡ stale) with no Naver backing.
+(NB: asil is empty for 목동 신시가지 - that's why the MAIN report keeps NEONET/Tencomz.)
 
 Filter (fixed): 전용 ≥ 55㎡, exclude the 80㎡대 (80.0~83.9, keeps 84 국민평형),
 신구로자이 excluded entirely (소형 주상복합, not comparable).
@@ -19,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from pipeline import asil_fetch, hanbang_fetch, dedupe_by_unit, dedupe_cross_source
+from pipeline import asil_fetch, dedupe_by_unit
 
 KST = timezone(timedelta(hours=9))
 REPO_ROOT = Path(__file__).parent
@@ -64,27 +67,6 @@ def _to_int(v):
         return None
 
 
-def hanbang_norm(name, trade):
-    """Hanbang rows -> pipeline row shape, for one trade type."""
-    out = []
-    for x in hanbang_fetch(name):
-        if x.get("trade") != trade:
-            continue
-        try:
-            ex = float(x.get("jun_meter") or 0)
-        except (TypeError, ValueError):
-            continue
-        out.append({
-            "source": "hanbang", "trade": trade, "exclusive": ex,
-            "dong": (x.get("danji_dong_nm") or "") + "동",
-            "floor": f"{x.get('curr_floor')}/{x.get('total_floor')}",
-            "price1": str(_to_int(x.get("amt_guar")) or ""),
-            "price2": str(_to_int(x.get("amt_month")) or "") if trade == "월세" else None,
-            "date": x.get("date", ""), "note": x.get("note", ""),
-        })
-    return out
-
-
 def keep(ex):
     """Fixed area filter: >=55, drop the 80㎡대 (80.0~83.9)."""
     return ex >= 55.0 and not (80.0 <= ex < 84.0)
@@ -107,48 +89,14 @@ def tier(ex):
     return (2, "전용 55~79㎡ · 중형")
 
 
-HANBANG_STALE_DAYS = 14  # 협회 단독 매물이 이만큼 오래되면 유령매물로 보고 제외
-
-
-def _parse_date(s):
-    """'26.08.08' or '2026-08-22' -> date, else None."""
-    s = (s or "").strip().replace("-", ".")
-    parts = s.split(".")
-    try:
-        if len(parts) == 3:
-            y, m, d = (int(p) for p in parts)
-            if y < 100:
-                y += 2000
-            return datetime(y, m, d, tzinfo=KST).date()
-    except (ValueError, TypeError):
-        pass
-    return None
-
-
-def _is_stale_hanbang(row, today):
-    """asil(네이버)은 신선도가 유지되니 나이 무관; 한방 단독 매물만 오래되면 제외.
-    Naver rarely keeps ghosts, so a hanbang-only listing that's weeks old with no
-    Naver presence is very likely already gone (see 태영 59㎡ case)."""
-    if row.get("source") != "hanbang":
-        return False
-    d = _parse_date(row.get("date"))
-    if d is None:
-        return False
-    return (today - d).days > HANBANG_STALE_DAYS
-
-
 def collect():
-    today = datetime.now(KST).date()
     listings = []
     for name, acode, hname, dist, year in NEIGHBORHOOD:
-        rows = []
-        for trade in ("전세", "월세"):
-            a = [r for r in dedupe_by_unit(asil_fetch(acode)) if r["trade"] == trade]
-            h = hanbang_norm(hname, trade)
-            rows += dedupe_cross_source(a + h)
-        for r in rows:
+        for r in dedupe_by_unit(asil_fetch(acode)):
+            if r["trade"] not in ("전세", "월세"):
+                continue
             ex = float(r.get("exclusive") or 0)
-            if not keep(ex) or _is_stale_hanbang(r, today):
+            if not keep(ex):
                 continue
             listings.append({
                 "name": name, "dist": dist, "year": year, "ex": ex,
@@ -156,7 +104,6 @@ def collect():
                 "dep": _to_int(r.get("price1")) or 0,
                 "wol": _to_int(r.get("price2")) if r["trade"] == "월세" else None,
                 "eq": jeonse_equiv(r), "date": r.get("date", ""),
-                "source": r.get("source", ""),
             })
         time.sleep(0.2)
     return listings
@@ -259,13 +206,12 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
     <a class="back" href="./index.html">← 내 매물 리포트</a>
     <h1>신도림 전세·월세 시세 <span style="font-size:14px;color:var(--ink-faint)">디큐브 인근 · __TOTAL__건</span></h1>
     <div class="sub">디큐브시티 반경 1.1km · 전용 55㎡↑ (80㎡대 제외) · 월세는 보증금+월세÷40으로 전세 환산</div>
-    <div class="build">마지막 자동 갱신 <b>__BUILD_TIME__</b> · 출처 asil(네이버)+한방(협회) 합집합</div>
+    <div class="build">마지막 자동 갱신 <b>__BUILD_TIME__</b> · 출처 asil(네이버 통합)</div>
   </header>
   __SECTIONS__
   <footer>
     전세가(환산): 월세는 보증금 + 월세(만원)÷40으로 전세 상당액 환산 (월 40만원 ≈ 1억). "보증금/월" 칸이 채워진 게 월세.<br>
-    "—" 층은 한방(협회) 매물로 층 정보가 없는 건. 신구로자이(소형 주상복합)는 비교군에서 제외.<br>
-    네이버에 없고 협회에만 등록된 매물 중 14일 넘은 건은 유령매물 가능성이 높아 자동 제외(네이버 매물은 등록일 무관 유지).<br>
+    출처는 asil(네이버 통합) 단독. 같은 매물을 여러 중개사가 중복등록해도 1건으로 정리됨. 신구로자이(소형 주상복합)는 비교군에서 제외.<br>
     매물은 나오는 즉시 계약돼 빠질 수 있어 실시간과 시차가 있을 수 있음. 참고용.
   </footer>
 </div>
