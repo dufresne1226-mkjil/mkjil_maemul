@@ -3,11 +3,14 @@
 Build docs/sindorim.html - a daily 전세/월세 시세표 for the apartment complexes
 around 디큐브시티 (신도림/구로 일대), benchmarking against the user's 디큐브 unit.
 
-Source: asil.kr only (aggregates Naver, and dedups Naver's cross-agent duplicate
-registrations correctly). Hanbang (협회) was dropped: for the 신도림 complexes asil
-covers Naver accurately (verified on SK뷰), while 한방-only listings turned out to be
-mostly ghosts/errors (e.g. SK뷰 84㎡ 2.8억 typo, 태영 59㎡ stale) with no Naver backing.
-(NB: asil is empty for 목동 신시가지 - that's why the MAIN report keeps NEONET/Tencomz.)
+Source: asil.kr only. asil shows Naver listings but ONLY from its partner agents
+(verified: asil listings' 중개사 == the complex's prtn_option 1:1), so it's a
+partner-agent SUBSET of Naver, not the full set - non-partner agents' listings are
+missed. It does dedup Naver's cross-agent duplicate registrations correctly.
+Hanbang (협회) was dropped anyway: 한방-only listings turned out to be ghosts/errors
+with no Naver backing (SK뷰 84㎡ 2.8억 typo, 태영 59㎡ stale), not real non-partner
+listings. (NB: asil is near-empty for 목동 신시가지 because those complexes have only
+~1 asil partner agent each - that's why the MAIN report keeps NEONET/Tencomz.)
 
 Filter (fixed): 전용 ≥ 55㎡, exclude the 80㎡대 (80.0~83.9, keeps 84 국민평형),
 신구로자이 excluded entirely (소형 주상복합, not comparable).
@@ -206,12 +209,12 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
     <a class="back" href="./index.html">← 내 매물 리포트</a>
     <h1>신도림 전세·월세 시세 <span style="font-size:14px;color:var(--ink-faint)">디큐브 인근 · __TOTAL__건</span></h1>
     <div class="sub">디큐브시티 반경 1.1km · 전용 55㎡↑ (80㎡대 제외) · 월세는 보증금+월세÷40으로 전세 환산</div>
-    <div class="build">마지막 자동 갱신 <b>__BUILD_TIME__</b> · 출처 asil(네이버 통합)</div>
+    <div class="build">마지막 자동 갱신 <b>__BUILD_TIME__</b> · 출처 asil(네이버 파트너망)</div>
   </header>
   __SECTIONS__
   <footer>
     전세가(환산): 월세는 보증금 + 월세(만원)÷40으로 전세 상당액 환산 (월 40만원 ≈ 1억). "보증금/월" 칸이 채워진 게 월세.<br>
-    출처는 asil(네이버 통합) 단독. 같은 매물을 여러 중개사가 중복등록해도 1건으로 정리됨. 신구로자이(소형 주상복합)는 비교군에서 제외.<br>
+    출처는 asil(네이버 파트너망) 단독 — 네이버에 뜬 매물 중 asil 제휴 중개사 물건만 집계되므로, 비제휴 중개사 매물은 빠질 수 있어 완전한 목록은 아님. 같은 매물을 여러 중개사가 중복등록해도 1건으로 정리됨. 신구로자이(소형 주상복합)는 비교군에서 제외.<br>
     매물은 나오는 즉시 계약돼 빠질 수 있어 실시간과 시차가 있을 수 있음. 참고용.
   </footer>
 </div>
