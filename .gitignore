@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 webapp/*.json
 .claude/
+.push_token
