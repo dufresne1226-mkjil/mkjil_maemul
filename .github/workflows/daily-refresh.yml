@@ -42,17 +42,26 @@ jobs:
       # regenerated interactively (from an IP serve accepts) and committed, and this
       # workflow just deploys whatever docs/sindorim.html is checked in.
 
+      # continue-on-error so a push race with the local sindorim cron can never
+      # skip the deploy below - the artifact is uploaded from the working tree
+      # regardless of whether this commit lands on origin.
       - name: Commit updated report
+        continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/index.html
           if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "daily data refresh $(date -u +%Y-%m-%d)"
-            git push
+            echo "No changes to commit"; exit 0
           fi
+          git commit -m "daily data refresh $(date -u +%Y-%m-%d)"
+          for i in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            echo "push rejected, rebasing and retrying ($i/5)..."
+            git fetch origin main && git rebase origin/main || git rebase --abort
+            sleep $((RANDOM % 5 + 2))
+          done
+          echo "push failed after retries - deploy will still run from working tree"
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
