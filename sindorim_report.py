@@ -145,6 +145,33 @@ def date_disp(d):
     return f"{p[1]}.{p[2]}" if len(p) == 3 else "—"
 
 
+def _date_key(d):
+    """'26.08.24' -> (2026,8,24) 로 최신순 정렬용. 없으면 아주 옛날(0,0,0)."""
+    p = (d or "").split(".")
+    if len(p) == 3 and all(x.isdigit() for x in p):
+        y = int(p[0]) + (2000 if int(p[0]) < 100 else 0)
+        return (y, int(p[1]), int(p[2]))
+    return (0, 0, 0)
+
+
+def dedupe_same_listing(listings):
+    """같은 단지 · 같은 전용면적(표시 정수㎡) · 같은 거래유형 · 같은 보증금/월세면
+    동일 매물로 보고 등록일이 가장 최근인 하나만 남긴다.
+
+    cross-source 디덥은 (동+층+가격)까지 맞아야 1건으로 합치는데, 소스마다 층/동을
+    다르게 적거나 비워두면 같은 물건이 여러 행으로 살아남는다. 이 페이지에서는
+    표에 보이는 값(단지·전용㎡·전세가·보증금/월)이 똑같으면 사용자가 곧 같은 매물로
+    보므로, 그런 행은 최신 등록일 하나로 접는다. 등록일이 같으면 층 정보가 있는 쪽."""
+    best = {}
+    for x in listings:
+        key = (x["name"], f'{x["ex"]:.0f}', x["trade"], x["dep"], x["wol"])
+        rank = (_date_key(x["date"]), 1 if floor_disp(x["floor"]) != "—" else 0)
+        cur = best.get(key)
+        if cur is None or rank > cur[0]:
+            best[key] = (rank, x)
+    return [v[1] for v in best.values()]
+
+
 def render(listings):
     from collections import defaultdict
     groups = defaultdict(list)
@@ -241,10 +268,15 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
 
 
 def main():
-    listings = collect()
-    if not listings:
+    raw = collect()
+    if not raw:
         print("ERROR: 0 listings collected, refusing to overwrite", file=sys.stderr)
         sys.exit(1)
+    listings = dedupe_same_listing(raw)
+    removed = len(raw) - len(listings)
+    if removed:
+        print(f"same-listing dedupe: {len(raw)} -> {len(listings)} ({removed}건 중복 제거)",
+              file=sys.stderr)
     html_out = render(listings)
     OUTPUT.parent.mkdir(exist_ok=True)
     OUTPUT.write_text(html_out, encoding="utf-8")
