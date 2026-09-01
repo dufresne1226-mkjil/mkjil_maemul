@@ -4,3 +4,4 @@ webapp/*.json
 .claude/
 .push_token
 sindorim_cron.log
+backup/
