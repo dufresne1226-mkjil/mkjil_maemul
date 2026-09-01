@@ -110,13 +110,12 @@ def main():
     data = {}
     for i, name in enumerate(COMPLEXES):
         if i > 0:
-            # GitHub Actions' shared runner IPs get measurably less complete
-            # results than a local/interactive session's IP for the same
-            # requests (see project memory) - a longer gap between complexes
-            # is being tried here to see if it reads as less bot-like than
-            # the earlier 3s pacing did. No extra requests added, just spaced
-            # out more.
-            time.sleep(15)
+            # Light courtesy gap between complexes. The old 15s here was a
+            # GitHub-Actions-IP anti-throttle mitigation (that runner IP got
+            # bot-flagged); now the build runs on the always-on local machine,
+            # whose IP fetches full results back-to-back with no throttling, so
+            # the 15s was ~75s of dead wait per run. 1s is plenty of courtesy.
+            time.sleep(1)
         rows = fetch_complex(name)
         data[name] = rows
         print(f"{name}: {len(rows)} rows", file=sys.stderr)
