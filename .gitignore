@@ -5,3 +5,4 @@ webapp/*.json
 .push_token
 sindorim_cron.log
 backup/
+refresh_cron.log

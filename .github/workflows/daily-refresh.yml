@@ -1,20 +1,23 @@
-name: Daily listing refresh
+name: Deploy listing pages
 
 on:
   schedule:
-    # 09:00 KST = 00:00 UTC
+    # 09:00 KST = 00:00 UTC. Safety re-deploy of the committed docs/ in case a
+    # local-cron workflow_dispatch was missed; the actual build is done by the
+    # local cron (refresh_all.sh, 08:30 KST) which dispatches this right after.
     - cron: "0 0 * * *"
   workflow_dispatch: {}
   push:
     branches: [main]
-    # ignore docs/** so the workflow's own data-refresh commit doesn't
-    # re-trigger itself in a loop - only template/script/workflow edits
-    # pushed by hand should auto-rebuild+redeploy.
+    # ignore docs/** - the local cron commits docs and triggers deploy via
+    # workflow_dispatch, so a docs push must not self-trigger. A hand push of
+    # template/script/workflow files still redeploys the committed docs/.
     paths-ignore:
       - "docs/**"
 
+# Deploy-only: no build, no commit here, so contents:read is enough.
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -23,46 +26,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  refresh:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Build report
-        run: python3 build_report.py
-
-      # NOTE: docs/sindorim.html (the 신도림 전세/월세 시세 page) is NOT built here.
-      # Its serve.co.kr source blocks GitHub Actions' datacenter IP, so running
-      # sindorim_report.py on the runner would only ever produce an asil-only
-      # (incomplete, 태영 missing) page and overwrite the good one. Instead it is
-      # regenerated interactively (from an IP serve accepts) and committed, and this
-      # workflow just deploys whatever docs/sindorim.html is checked in.
-
-      # continue-on-error so a push race with the local sindorim cron can never
-      # skip the deploy below - the artifact is uploaded from the working tree
-      # regardless of whether this commit lands on origin.
-      - name: Commit updated report
-        continue-on-error: true
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html
-          if git diff --cached --quiet; then
-            echo "No changes to commit"; exit 0
-          fi
-          git commit -m "daily data refresh $(date -u +%Y-%m-%d)"
-          for i in 1 2 3 4 5; do
-            if git push; then exit 0; fi
-            echo "push rejected, rebasing and retrying ($i/5)..."
-            git fetch origin main && git rebase origin/main || git rebase --abort
-            sleep $((RANDOM % 5 + 2))
-          done
-          echo "push failed after retries - deploy will still run from working tree"
-
+      # Deploy-only. BOTH pages (docs/index.html + docs/sindorim.html) are built
+      # 4-source (NEONET+텐컴즈+asil+부동산써브) by the always-on local machine's
+      # cron (refresh_all.sh) and committed. serve.co.kr blocks GitHub Actions'
+      # datacenter IP, so building on the runner would silently drop serve and
+      # overwrite the good pages with a 3-source version. This workflow just
+      # publishes whatever docs/ is checked in; the local cron triggers it via
+      # workflow_dispatch after each build.
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
