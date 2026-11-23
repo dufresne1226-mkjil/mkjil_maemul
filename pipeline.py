@@ -179,6 +179,10 @@ def neonet_fetch(region_cd, complex_cd, max_pages=30):
                 floor_raw = area.group(3).strip()
                 floor_nums = re.findall(r'\d+', floor_raw)
                 floor_norm = "/".join(floor_nums) if len(floor_nums) == 2 else floor_raw
+                # "중층/15층" 같은 글자 층은 "중/15"로 ('층' 글자 없이 asil·써브와 같은 표기)
+                head, _, tail = floor_raw.partition("/")
+                if len(floor_nums) < 2 and head.strip() in ("저층", "중층", "고층", "저", "중", "고"):
+                    floor_norm = _floor_label(head, "".join(re.findall(r"\d+", tail))).rstrip("/")
                 rows.append({
                     "source": "neonet", "dong": dong.group(1), "trade": trade.group(1),
                     "price1": trade.group(2).replace(",", ""),
@@ -506,12 +510,12 @@ def dedupe_by_unit(rows):
     return list(uniq.values())
 
 
-_FLOOR_BAND = {"저": "저층", "중": "중층", "고": "고층"}
+_FLOOR_BAND = {"저층": "저", "중층": "중", "고층": "고"}
 
 
 def _floor_label(cur, total):
-    """'현재층/총층' 표기. 현재층이 저/중/고 글자면 '저층'처럼 통일하고,
-    숫자·빈 값은 그대로 둔다(빈 값이면 '/51')."""
+    """'현재층/총층' 표기. 현재층이 저층·중층·고층 글자면 '저'·'중'·'고'로 통일하고
+    ('층' 글자 없음), 숫자·빈 값은 그대로 둔다(빈 값이면 '/51')."""
     cur = str(cur or "").strip()
     return f"{_FLOOR_BAND.get(cur, cur)}/{total}"
 
