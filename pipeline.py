@@ -398,7 +398,10 @@ def asil_fetch(asil_code, max_total=100):
             dong = (it.get("BDONG_NM") or "").strip()
             if dong and not dong.endswith("동"):
                 dong += "동"
-            floor = f"{it.get('CORES_FLR_CNT', '')}/{it.get('TOT_FLR_CNT', '')}"
+            # 현재 층은 CORES_FLR_CNT_NM (FLR_DP_MTHD_CD=1 이면 숫자, 2 이면 저/중/고 글자).
+            # 예전 이름 CORES_FLR_CNT 는 응답에 없어서 전 건이 "/51"처럼 비어 있었다.
+            floor = _floor_label(it.get("CORES_FLR_CNT_NM", it.get("CORES_FLR_CNT", "")),
+                                 it.get("TOT_FLR_CNT", ""))
             # SVC_DATE_STRT is "2026-08-22" -> normalize to "26.08.22" like the others
             d = (it.get("SVC_DATE_STRT") or "").replace("-", ".")
             date = d[2:] if len(d) == 10 else d
@@ -474,7 +477,7 @@ def serve_fetch_ldong(ldong_cd, max_articles=3000):
             dong = str(it.get("dongNm") or "").strip()
             if dong and not dong.endswith("동"):
                 dong += "동"
-            floor = f"{it.get('flr1', '')}/{it.get('flr2', '')}".strip("/")
+            floor = _floor_label(it.get("flr1", ""), it.get("flr2", "")).strip("/")
             d = (it.get("atclRegDttm") or "")[:10].replace("-", ".")  # 2026-08-22 -> 2026.08.22
             date = d[2:] if len(d) == 10 else d
             note = (it.get("dtlDesc") or it.get("atclSfeCn") or it.get("mvnInfoCn") or "").strip()
@@ -501,6 +504,16 @@ def dedupe_by_unit(rows):
         if key not in uniq or (r.get("date", "") > uniq[key].get("date", "")):
             uniq[key] = r
     return list(uniq.values())
+
+
+_FLOOR_BAND = {"저": "저층", "중": "중층", "고": "고층"}
+
+
+def _floor_label(cur, total):
+    """'현재층/총층' 표기. 현재층이 저/중/고 글자면 '저층'처럼 통일하고,
+    숫자·빈 값은 그대로 둔다(빈 값이면 '/51')."""
+    cur = str(cur or "").strip()
+    return f"{_FLOOR_BAND.get(cur, cur)}/{total}"
 
 
 def _floor_num(floor):
@@ -544,14 +557,17 @@ def dedupe_cross_source(rows):
             uniq[key] = r
     kept = [uniq[k] for k in order]
 
-    # Pass 2: absorb a floor-less row into an already-kept twin. Hanbang often
+    # Pass 2: absorb a floor-less row (no numeric floor: blank, None, or a 저/중/고
+    # band label) into an already-kept twin that has a real floor. Hanbang often
     # omits BOTH floor and 동, and reports the "type" 전용면적 (84.0 where asil has
     # the precise 84.96), so pass 1 can't match it. Since dedup runs per-complex,
     # a floor-less row matching an existing row on 거래+가격 with area within 2㎡ is
     # the same unit cross-listed; drop it. 동 is only enforced when BOTH rows have
     # one. Floor-bearing rows are added first so floor-less ones can find them.
     def _floorless(r):
-        return _floor_num(r.get("floor")) in ("", "None", "-")
+        # 실층 숫자가 없는 행(빈 값·None·저/중/고 글자)은 소스와 무관하게
+        # 같은 매물의 실층 숫자 행에 흡수되어, 표에는 실층 숫자가 남는다.
+        return not _floor_num(r.get("floor")).isdigit()
 
     def _area(r):
         return float(r.get("exclusive") or 0)
