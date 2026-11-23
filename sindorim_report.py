@@ -186,12 +186,11 @@ def render(listings):
         for r in rows:
             wol = (f'{_eok(r["dep"])}억 / {r["wol"]}' if r["trade"] == "월세" else "—")
             mark = ' <span class="tag-w">월세</span>' if r["trade"] == "월세" else ""
-            you = ' <span class="tag-me">내 물건</span>' if r["name"] == "신도림디큐브시티" and abs(r["ex"]-85) < 2 and r["trade"] == "전세" else ""
             trs.append(
-                f'<tr{" class=\"row-me\"" if you else ""}>'
+                f'<tr>'
                 f'<td class="c-eq" data-label="전세가(환산)">{_eok(r["eq"])}억</td>'
                 f'<td class="c-w" data-label="보증금/월">{wol}</td>'
-                f'<td data-label="단지">{_html.escape(r["name"])}{you}{mark}</td>'
+                f'<td data-label="단지">{_html.escape(r["name"])}{mark}</td>'
                 f'<td class="c-dist" data-label="거리">{r["dist"]}m</td>'
                 f'<td class="c-num" data-label="준공">{r["year"]}</td>'
                 f'<td class="c-num" data-label="전용">{r["ex"]:.0f}㎡</td>'
@@ -213,9 +212,9 @@ def render(listings):
 TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>신도림 전세·월세 시세 · 디큐브 인근</title>
 <style>
-  :root{--paper:#faf7f2;--paper-deep:#efe8db;--line:#ddd3c2;--ink:#241f1a;--ink-soft:#6f6459;--ink-faint:#a89d8e;--stamp:#b23b2e;--jeonse:#3b6e5e;--wolse:#8a6a1f;--me:#b23b2e;}
-  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--paper:#1c1815;--paper-deep:#262019;--line:#3a3229;--ink:#ede6da;--ink-soft:#b3a897;--ink-faint:#7d7264;--stamp:#e06a5a;--jeonse:#6fb39c;--wolse:#c9a24e;--me:#e06a5a;}}
-  :root[data-theme=dark]{--paper:#1c1815;--paper-deep:#262019;--line:#3a3229;--ink:#ede6da;--ink-soft:#b3a897;--ink-faint:#7d7264;--stamp:#e06a5a;--jeonse:#6fb39c;--wolse:#c9a24e;--me:#e06a5a;}
+  :root{--paper:#faf7f2;--paper-deep:#efe8db;--line:#ddd3c2;--ink:#241f1a;--ink-soft:#6f6459;--ink-faint:#a89d8e;--stamp:#b23b2e;--jeonse:#3b6e5e;--wolse:#8a6a1f;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--paper:#1c1815;--paper-deep:#262019;--line:#3a3229;--ink:#ede6da;--ink-soft:#b3a897;--ink-faint:#7d7264;--stamp:#e06a5a;--jeonse:#6fb39c;--wolse:#c9a24e;}}
+  :root[data-theme=dark]{--paper:#1c1815;--paper-deep:#262019;--line:#3a3229;--ink:#ede6da;--ink-soft:#b3a897;--ink-faint:#7d7264;--stamp:#e06a5a;--jeonse:#6fb39c;--wolse:#c9a24e;}
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;word-break:keep-all;line-height:1.5}
   .wrap{max-width:920px;margin:0 auto;padding:28px 16px 60px}
@@ -236,8 +235,6 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
   .c-num{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink-soft)}
   .c-dist{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink-soft);text-align:right}
   .tag-w{background:var(--wolse);color:#fff;font-size:10px;padding:1px 5px;border-radius:3px;vertical-align:middle}
-  .tag-me{background:var(--me);color:#fff;font-size:10px;padding:1px 5px;border-radius:3px}
-  .row-me td{background:var(--paper-deep)}
   footer{margin-top:34px;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-faint);line-height:1.7}
   @media(max-width:640px){
     thead{display:none}
@@ -247,7 +244,6 @@ TEMPLATE = """<meta name="viewport" content="width=device-width, initial-scale=1
     tr td:last-child{border-bottom:none}
     td::before{content:attr(data-label);font-size:11px;text-transform:uppercase;color:var(--ink-soft)}
     .c-eq{font-size:16px}
-    .row-me td{background:transparent}
   }
 </style>
 <div class="wrap">
